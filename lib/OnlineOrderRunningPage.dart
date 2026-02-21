@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'main.dart' as app;
 
+// --- CHART COMPONENT ---
 class SimpleBarChart extends StatelessWidget {
   final bool isMobile;
   final List<String> days;
@@ -25,32 +26,22 @@ class SimpleBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxY = [
-      ...zomato,
-      ...swiggy,
-      ...online,
-    ].fold(0, (a, b) => a > b ? a : b);
-
+    final maxY = [...zomato, ...swiggy, ...online].fold(0, (a, b) => a > b ? a : b);
     final double barWidth = isMobile ? 14 : 22;
     final double groupWidth = barWidth * 3 + (isMobile ? 12 : 20);
 
     return Container(
-      height: isMobile ? 140 : 230,
+      height: isMobile ? 160 : 250,
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
-      padding: EdgeInsets.only(
-        left: isMobile ? 8 : 22,
-        right: isMobile ? 8 : 22,
-        top: isMobile ? 6 : 18,
-        bottom: isMobile ? 12 : 28,
-      ),
+      padding: EdgeInsets.all(isMobile ? 12 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Chart
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -71,62 +62,31 @@ class SimpleBarChart extends StatelessWidget {
               },
             ),
           ),
-          // X Axis labels
           Padding(
-            padding: EdgeInsets.symmetric(vertical: isMobile ? 2 : 7),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: days.map((d) {
-                return Expanded(
-                  child: Center(
-                    child: Text(
-                      d,
-                      style: TextStyle(
-                        fontSize: isMobile ? 10 : 13,
-                        color: Colors.black,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+              children: days.map((d) => Expanded(
+                  child: Center(child: Text(d, style: TextStyle(fontSize: isMobile ? 10 : 12, color: const Color(0xFF7F8C8D))))
+              )).toList(),
             ),
           ),
-          // Legend
-          Padding(
-            padding: EdgeInsets.only(top: isMobile ? 4 : 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _legendDot(color: const Color(0xFFC8102E)), // Zomato red
-                SizedBox(width: isMobile ? 2 : 7),
-                Text("Zomato", style: TextStyle(fontSize: isMobile ? 10 : 13)),
-                SizedBox(width: isMobile ? 14 : 22),
-                _legendDot(color: const Color(0xFFFF8C1A)), // Swiggy orange
-                SizedBox(width: isMobile ? 2 : 7),
-                Text("Swiggy", style: TextStyle(fontSize: isMobile ? 10 : 13)),
-                SizedBox(width: isMobile ? 14 : 22),
-                _legendDot(color: Colors.blue), // Online: blue
-                SizedBox(width: isMobile ? 2 : 7),
-                Text("Online", style: TextStyle(fontSize: isMobile ? 10 : 13)),
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _legendDot(const Color(0xFFC8102E)), const SizedBox(width: 4), Text("Zomato", style: TextStyle(fontSize: isMobile ? 10 : 12)),
+              const SizedBox(width: 16),
+              _legendDot(const Color(0xFFFF8C1A)), const SizedBox(width: 4), Text("Swiggy", style: TextStyle(fontSize: isMobile ? 10 : 12)),
+              const SizedBox(width: 16),
+              _legendDot(const Color(0xFF4154F1)), const SizedBox(width: 4), Text("Online", style: TextStyle(fontSize: isMobile ? 10 : 12)),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _legendDot({required Color color}) {
-    return Container(
-      width: 11,
-      height: 11,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
+  Widget _legendDot(Color color) => Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
 }
 
 class _BarChartPainter extends CustomPainter {
@@ -135,134 +95,65 @@ class _BarChartPainter extends CustomPainter {
   final double barWidth, groupWidth, maxY;
   final bool isMobile;
 
-  _BarChartPainter({
-    required this.days,
-    required this.zomato,
-    required this.swiggy,
-    required this.barWidth,
-    required this.groupWidth,
-    required this.maxY,
-    required this.isMobile,
-    required this.online,
-  });
+  _BarChartPainter({required this.days, required this.zomato, required this.swiggy, required this.barWidth, required this.groupWidth, required this.maxY, required this.isMobile, required this.online});
 
   @override
   void paint(Canvas canvas, Size size) {
     final double chartHeight = size.height;
-    final Paint axisPaint = Paint()
-      ..color = Colors.black87
-      ..strokeWidth = 1;
-
-    // Draw horizontal axis (bottom)
-    canvas.drawLine(
-      Offset(0, chartHeight - 1),
-      Offset(size.width, chartHeight - 1),
-      axisPaint,
-    );
-
-    // Draw horizontal grid lines (2 for 3 ticks)
-    final gridPaint = Paint()
-      ..color = Colors.grey[300]!
-      ..strokeWidth = 1;
-    for (int i = 1; i <= 2; i++) {
+    final gridPaint = Paint()..color = const Color(0xFFF5F7FA)..strokeWidth = 1;
+    for (int i = 1; i <= 3; i++) {
       final y = chartHeight - (chartHeight * i / 3);
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
-
-    final double leftPad = isMobile ? 2 : 8;
-    final barSpacing = isMobile ? 8.0 : 15.0;
-    final groupSpace = (size.width - groupWidth * days.length) / (days.length + 1);
-
-    double x = groupSpace / 2;
-
+    final barSpacing = isMobile ? 4.0 : 8.0;
+    final groupSpace = (size.width - (groupWidth * days.length)) / (days.length + 1);
+    double x = groupSpace;
     for (int i = 0; i < days.length; i++) {
-      // Zomato (red)
-      _drawBar(
-        canvas,
-        x + leftPad,
-        chartHeight,
-        barWidth,
-        zomato[i],
-        maxY,
-        const Color(0xFFC8102E),
-      );
-      // Swiggy (orange)
-      _drawBar(
-        canvas,
-        x + barWidth + barSpacing + leftPad,
-        chartHeight,
-        barWidth,
-        swiggy[i],
-        maxY,
-        const Color(0xFFFF8C1A),
-      );
-
-      _drawBar(canvas, x + 2 * (barWidth + barSpacing) + leftPad, chartHeight, barWidth, online[i], maxY, Colors.blue);
-
+      _drawBar(canvas, x, chartHeight, barWidth, zomato[i], maxY, const Color(0xFFC8102E));
+      _drawBar(canvas, x + barWidth + barSpacing, chartHeight, barWidth, swiggy[i], maxY, const Color(0xFFFF8C1A));
+      _drawBar(canvas, x + 2 * (barWidth + barSpacing), chartHeight, barWidth, online[i], maxY, const Color(0xFF4154F1));
       x += groupWidth + groupSpace;
     }
   }
 
   void _drawBar(Canvas canvas, double x, double chartHeight, double width, int value, double maxY, Color color) {
-    final barHeight = (value / maxY) * (chartHeight - (isMobile ? 16 : 32));
-    final rect = Rect.fromLTWH(
-      x,
-      chartHeight - barHeight - 1,
-      width,
-      barHeight,
-    );
-    final paint = Paint()..color = color;
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)), paint);
+    final barHeight = (value / maxY) * (chartHeight - 10);
+    final rect = Rect.fromLTWH(x, chartHeight - barHeight, width, barHeight);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), Paint()..color = color);
   }
 
-  @override
-  bool shouldRepaint(covariant _BarChartPainter oldDelegate) => true;
+  @override bool shouldRepaint(covariant _BarChartPainter oldDelegate) => true;
 }
 
 // --- MAIN PAGE ---
 class OnlineOrderRunningPage extends StatefulWidget {
   final Map<String, String> dbToBrandMap;
-
   const OnlineOrderRunningPage({super.key, required this.dbToBrandMap});
 
   @override
   State<OnlineOrderRunningPage> createState() => _OnlineOrderRunningPageState();
 }
 
-class _OnlineOrderRunningPageState extends State<OnlineOrderRunningPage>
-    with SingleTickerProviderStateMixin {
+class _OnlineOrderRunningPageState extends State<OnlineOrderRunningPage> with SingleTickerProviderStateMixin {
   String? selectedBrand = "All";
   String? selectedRestaurant;
   String? selectedRecordType = "Last 2 days records";
   DateTimeRange? customDateRange;
   String? selectedStatus = "All";
   final TextEditingController orderNoController = TextEditingController();
-
   late TabController _tabController;
-  bool showChart = false; // Chart/table toggle
-
+  bool showChart = true;
   List<Map<String, dynamic>> onlineOrderRecords = [];
   List<Map<String, dynamic>> displayedRecords = [];
   bool isLoading = false;
 
-  // Check if user has only one DB assigned
   bool get hasOnlyOneDb => widget.dbToBrandMap.length == 1;
-
-  // Get the single brand name if there's only one DB
-  String? get singleBrandName => hasOnlyOneDb ? widget.dbToBrandMap.values.first : null;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    // If user has only one DB, set selectedBrand to that DB's brand
-    if (hasOnlyOneDb) {
-      selectedBrand = singleBrandName;
-    }
+    if (hasOnlyOneDb) selectedBrand = widget.dbToBrandMap.values.first;
     fetchOnlineOrders();
   }
 
@@ -276,20 +167,15 @@ class _OnlineOrderRunningPageState extends State<OnlineOrderRunningPage>
 
   Map<String, List<int>> get barChartData {
     List<String> days = last7DaysLabels;
-    Map<String, List<int>> data = {
-      "Zomato": List.filled(7, 0),
-      "Swiggy": List.filled(7, 0),
-      "Online": List.filled(7, 0),
-    };
+    Map<String, List<int>> data = {"Zomato": List.filled(7, 0), "Swiggy": List.filled(7, 0), "Online": List.filled(7, 0)};
     for (var row in onlineOrderRecords) {
       final k = row['record'] as OnlineOrderReport;
-      final date = k.orderDateTime;
-      final label = "${date.day.toString().padLeft(2, '0')}-${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][date.month-1]}";
-      int dayIdx = days.indexOf(label);
-      if (dayIdx != -1) {
-        if ((k.orderFrom ?? "").toLowerCase().contains("zomato")) data["Zomato"]![dayIdx]++;
-        else if ((k.orderFrom ?? "").toLowerCase().contains("swiggy")) data["Swiggy"]![dayIdx]++;
-        else if ((k.orderFrom ?? "").toLowerCase().contains("online")) data["Online"]![dayIdx]++;
+      final label = "${k.orderDateTime.day.toString().padLeft(2, '0')}-${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][k.orderDateTime.month-1]}";
+      int idx = days.indexOf(label);
+      if (idx != -1) {
+        if (k.orderFrom.toLowerCase().contains("zomato")) data["Zomato"]![idx]++;
+        else if (k.orderFrom.toLowerCase().contains("swiggy")) data["Swiggy"]![idx]++;
+        else if (k.orderFrom.toLowerCase().contains("online")) data["Online"]![idx]++;
       }
     }
     return data;
@@ -298,801 +184,398 @@ class _OnlineOrderRunningPageState extends State<OnlineOrderRunningPage>
   Future<void> fetchOnlineOrders() async {
     setState(() => isLoading = true);
     final config = await app.Config.loadFromAsset();
-    List<String> dbNames;
-    if (selectedBrand == null || selectedBrand == "All") {
-      dbNames = widget.dbToBrandMap.keys.toList();
-    } else {
-      dbNames = widget.dbToBrandMap.entries
-          .where((entry) => entry.value == selectedBrand)
-          .map((entry) => entry.key)
-          .toList();
-    }
-    DateTime startDate;
-    DateTime endDate = DateTime.now();
-    if (selectedRecordType == "Last 2 days records") {
-      startDate = DateTime.now().subtract(const Duration(days: 1));
-    } else if (selectedRecordType == "Last 7 days records") {
-      startDate = DateTime.now().subtract(const Duration(days: 6));
-    } else if (selectedRecordType == "Custom Date Range" && customDateRange != null) {
-      startDate = customDateRange!.start;
-      endDate = customDateRange!.end;
-    } else {
-      // "Today"
-      startDate = DateTime.now();
-    }
+    List<String> dbNames = (selectedBrand == "All" || selectedBrand == null)
+        ? widget.dbToBrandMap.keys.toList()
+        : widget.dbToBrandMap.entries.where((e) => e.value == selectedBrand).map((e) => e.key).toList();
 
-    final start = DateFormat('dd-MM-yyyy').format(startDate);
-    final end = DateFormat('dd-MM-yyyy').format(endDate);
-    final dbToOrders = await app.UserData.fetchOnlineOrdersForDbs(config, dbNames, start, end);
+    DateTime start, end = DateTime.now();
+    if (selectedRecordType == "Last 2 days records") start = DateTime.now().subtract(const Duration(days: 1));
+    else if (selectedRecordType == "Last 7 days records") start = DateTime.now().subtract(const Duration(days: 6));
+    else if (selectedRecordType == "Custom Date Range" && customDateRange != null) { start = customDateRange!.start; end = customDateRange!.end; }
+    else start = DateTime.now();
 
-    // Flatten and attach dbName to each row
+    final dbToOrders = await app.UserData.fetchOnlineOrdersForDbs(config, dbNames, DateFormat('dd-MM-yyyy').format(start), DateFormat('dd-MM-yyyy').format(end));
     List<Map<String, dynamic>> all = [];
-    dbToOrders.forEach((db, list) {
-      for (final k in list) {
-        all.add({'dbName': db, 'record': k});
-      }
-    });
+    dbToOrders.forEach((db, list) { for (final k in list) all.add({'dbName': db, 'record': k}); });
 
-    setState(() {
-      onlineOrderRecords = all;
-      displayedRecords = all;
-      isLoading = false;
-    });
-  }
-
-  void applyFilters() {
-    String? brand = selectedBrand;
-    String? orderNo = orderNoController.text.trim();
-    String? status = selectedStatus;
-    String? restaurant = selectedRestaurant;
-    setState(() {
-      displayedRecords = onlineOrderRecords.where((row) {
-        final k = row['record'] as OnlineOrderReport;
-        bool match = true;
-        if (brand != null && brand != "All") {
-          final db = row['dbName'] as String;
-          match &= widget.dbToBrandMap[db] == brand;
-        }
-        if (restaurant != null && restaurant.isNotEmpty) {
-          final db = row['dbName'] as String;
-          match &= ("$db - ${widget.dbToBrandMap[db]}" == restaurant);
-        }
-        if (orderNo != null && orderNo.isNotEmpty) {
-          match &= k.onlineOrderId.contains(orderNo) || k.externalOrderId.contains(orderNo);
-        }
-        if (status != null && status != "All") {
-          match &= _statusMatches(k.status, status);
-        }
-        return match;
-      }).toList();
-    });
-  }
-
-  bool _statusMatches(String value, String filter) {
-    String status = value.toLowerCase();
-    String filterValue = filter.toLowerCase();
-    if (filterValue == "prepared") return status == "prepared" || status == "food ready";
-    if (filterValue == "food ready") return status == "food ready";
-    if (filterValue == "pick up") return status == "pick up";
-    if (filterValue == "delivered") return status == "delivered";
-    return status == filterValue;
-  }
-
-  void showAll() {
-    setState(() {
-      displayedRecords = onlineOrderRecords;
-      selectedBrand = hasOnlyOneDb ? singleBrandName : "All";
-      selectedStatus = "All";
-      selectedRestaurant = null;
-      orderNoController.clear();
-      selectedRecordType = "Last 2 days records";
-      customDateRange = null;
-    });
-  }
-
-  Future<void> _handleRecordTypeChange(String? v) async {
-    if (v == "Custom Date Range") {
-      DateTime now = DateTime.now();
-      DateTimeRange initialRange = customDateRange ??
-          DateTimeRange(start: now.subtract(Duration(days: 6)), end: now);
-      DateTimeRange? picked = await showDateRangePicker(
-        context: context,
-        initialDateRange: initialRange,
-        firstDate: DateTime(2020),
-        lastDate: now,
-        builder: (context, child) {
-          return Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 420,
-                minWidth: 320,
-                maxHeight: 520,
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: child!,
-              ),
-            ),
-          );
-        },
-      );
-      if (picked != null) {
-        setState(() {
-          selectedRecordType = v;
-          customDateRange = picked;
-        });
-        await fetchOnlineOrders();
-      }
-    } else {
-      setState(() {
-        selectedRecordType = v;
-        if (v != "Custom Date Range") customDateRange = null;
-      });
-      await fetchOnlineOrders();
-    }
+    setState(() { onlineOrderRecords = all; displayedRecords = all; isLoading = false; });
   }
 
   Future<void> exportToExcel() async {
     final excelFile = excel.Excel.createExcel();
     final sheet = excelFile['Online Order Report'];
-    final headerStyle = excel.CellStyle(
-      bold: true,
-      fontFamily: excel.getFontFamily(excel.FontFamily.Calibri),
-    );
+    final headerStyle = excel.CellStyle(bold: true);
 
-    // Group data by brand name
     Map<String, List<OnlineOrderReport>> brandWiseData = {};
     for (var row in displayedRecords) {
-      final dbName = row['dbName'] as String;
-      final brand = widget.dbToBrandMap[dbName] ?? "Unknown";
+      final brand = widget.dbToBrandMap[row['dbName']] ?? "Unknown";
       brandWiseData.putIfAbsent(brand, () => []).add(row['record']);
     }
 
     int rowIndex = 0;
     for (var entry in brandWiseData.entries) {
-      // Brand Name Row
-      sheet.appendRow([entry.key]);
-      rowIndex++;
-      // Header Row
-      final headerRow = [
-        'Order No.',
-        'Outlet Name',
-        'Order Type',
-        'Customer',
-        'Phone',
-        'Date Time',
-        'Gross Amount',
-        'Net Amount',
-        'Status',
-        'Channel',
-      ];
+      sheet.appendRow([entry.key]); rowIndex++;
+      final headerRow = ['Order No.', 'Outlet', 'Type', 'Customer', 'Phone', 'Date', 'Gross', 'Net', 'Status', 'Channel'];
       sheet.appendRow(headerRow);
       for (int i = 0; i < headerRow.length; i++) {
-        sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex))
-          ..cellStyle = headerStyle;
+        sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex)).cellStyle = headerStyle;
       }
       rowIndex++;
-      // Data rows
       for (var row in entry.value) {
-        sheet.appendRow([
-          row.onlineOrderId,
-          row.restaurantName,
-          row.orderType,
-          row.customerName,
-          row.phoneNumber,
-          row.orderDateTime.toString(),
-          row.grossAmount.toStringAsFixed(3), // Change here
-          row.netAmount.toStringAsFixed(3),
-          row.status,
-          row.orderFrom,
-        ]);
+        sheet.appendRow([row.onlineOrderId, row.restaurantName, row.orderType, row.customerName, row.phoneNumber, row.orderDateTime.toString(), row.grossAmount, row.netAmount, row.status, row.orderFrom]);
         rowIndex++;
       }
-      rowIndex++; // Empty row between brands
-      sheet.appendRow([]);
+      sheet.appendRow([]); rowIndex++;
     }
 
     final directory = await getApplicationDocumentsDirectory();
     final filePath = '${directory.path}/OnlineOrderReport.xlsx';
-    final fileBytes = excelFile.encode();
-    final file = File(filePath)
-      ..createSync(recursive: true)
-      ..writeAsBytesSync(fileBytes!);
-
+    final file = File(filePath)..writeAsBytesSync(excelFile.encode()!);
     OpenFile.open(filePath);
+  }
+
+  Future<void> _handleRecordTypeChange(String? v) async {
+    if (v == "Custom Date Range") {
+      DateTimeRange? picked = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now(),
+        initialDateRange: customDateRange ?? DateTimeRange(start: DateTime.now().subtract(const Duration(days: 6)), end: DateTime.now()),
+      );
+      if (picked != null) { setState(() { selectedRecordType = v; customDateRange = picked; }); fetchOnlineOrders(); }
+    } else {
+      setState(() { selectedRecordType = v; customDateRange = null; }); fetchOnlineOrders();
+    }
+  }
+
+  void applyFilters() {
+    setState(() {
+      displayedRecords = onlineOrderRecords.where((row) {
+        final k = row['record'] as OnlineOrderReport;
+        bool match = true;
+        if (selectedBrand != "All" && selectedBrand != null) match &= widget.dbToBrandMap[row['dbName']] == selectedBrand;
+        if (selectedRestaurant != null) match &= ("${row['dbName']} - ${widget.dbToBrandMap[row['dbName']]}" == selectedRestaurant);
+        if (orderNoController.text.isNotEmpty) match &= (k.onlineOrderId.contains(orderNoController.text) || k.externalOrderId.contains(orderNoController.text));
+        if (selectedStatus != "All") match &= k.status.toLowerCase().contains(selectedStatus!.toLowerCase());
+        return match;
+      }).toList();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final bool isHeaderMobile = size.width < 700;
+    final bool isMobile = size.width < 700;
     final brandNames = widget.dbToBrandMap.values.toSet();
-    final restaurantList = widget.dbToBrandMap.entries
-        .map((e) => "${e.key} - ${e.value}")
-        .toList();
-
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 600;
-
-    final chartData = barChartData;
-    final simpleBarChart = SimpleBarChart(
-      isMobile: isMobile,
-      days: last7DaysLabels,
-      zomato: chartData["Zomato"]!,
-      swiggy: chartData["Swiggy"]!,
-      online: chartData["Online"]!,
-    );
+    final restaurantList = widget.dbToBrandMap.entries.map((e) => "${e.key} - ${e.value}").toList();
 
     return SidePanel(
       dbToBrandMap: widget.dbToBrandMap,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isMobile = constraints.maxWidth < 600;
-
-          return Scaffold(
-            backgroundColor: Colors.white,
-            appBar: PreferredSize(
-              preferredSize: const Size.fromHeight(60),
-              child: AppBar(
-                backgroundColor: Colors.white,
-                elevation: 0,
-                titleSpacing: 0,
-                automaticallyImplyLeading: false,
-                title: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Only show outlet dropdown if there's more than one DB
-                      if (!hasOnlyOneDb)
-                        Container(
-                          margin: const EdgeInsets.only(left: 50, right: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.black),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 100,
-                            maxWidth: 190,
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: selectedBrand,
-                              hint: const Text(
-                                "All Outlets",
-                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.normal),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
-                              isExpanded: true,
-                              items: [
-                                const DropdownMenuItem(
-                                  value: "All",
-                                  child: Text("All Outlets", style: TextStyle(fontWeight: FontWeight.normal)),
-                                ),
-                                ...brandNames.map(
-                                      (brand) => DropdownMenuItem(
-                                    value: brand,
-                                    child: Text(
-                                      brand,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.normal),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (value) async {
-                                setState(() {
-                                  selectedBrand = value;
-                                });
-                                await fetchOnlineOrders();
-                              },
-                            ),
-                          ),
-                        )
-                      else
-                      // If only one DB, show just the outlet name without dropdown
-                        Container(
-                          margin: const EdgeInsets.only(left: 50, right: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.black),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            singleBrandName ?? "",
-                            style: const TextStyle(fontWeight: FontWeight.normal),
-                          ),
-                        ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          side: BorderSide(color: Colors.grey[300]!),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          textStyle: const TextStyle(fontWeight: FontWeight.normal),
-                        ),
-                        icon: const Icon(Icons.refresh, size: 18, color: Colors.black87),
-                        label: const Text(""),
-                        onPressed: fetchOnlineOrders,
-                      ),
-                      if (Platform.isWindows && !isMobile)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 900, top: 10),
-                          child: Align(
-                            alignment: Alignment.topRight,
-                            child: Image.asset(
-                              'assets/images/logo.jpg',
-                              height: 40,
-                            ),
-                          ),
-                        )
-                      else
-                        Padding(
-                          padding: const EdgeInsets.only(left: 150),
-                          child: Image.asset(
-                            'assets/images/logo.jpg',
-                            height: isMobile ? 32 : 40,
-                          ),
-                        ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          toolbarHeight: 70,
+          automaticallyImplyLeading: false,
+          centerTitle: true,
+          title: const Text("Online Orders", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50))),
+          leadingWidth: isHeaderMobile ? 80 : 380,
+          leading: isHeaderMobile ? null : _buildDesktopSelector(brandNames),
+          actions: [
+            _buildIconButton(Icons.download, exportToExcel),
+            _buildIconButton(Icons.refresh, fetchOnlineOrders),
+            const SizedBox(width: 16),
+          ],
+        ),
+        body: Column(
+          children: [
+            _buildChannelFilterBar(),
+            Expanded(
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF4154F1)))
+                  : SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    _buildSummaryRow(),
+                    const SizedBox(height: 24),
+                    if (showChart) ...[
+                      SimpleBarChart(isMobile: isMobile, days: last7DaysLabels, zomato: barChartData["Zomato"]!, swiggy: barChartData["Swiggy"]!, online: barChartData["Online"]!),
+                      const SizedBox(height: 24),
                     ],
-                  ),
+                    _buildFilterSection(isMobile, restaurantList),
+                    const SizedBox(height: 24),
+                    _buildTableContainer(size.width),
+                  ],
                 ),
               ),
             ),
-            body: Column(
-              children: [
-                Container(
-                  height: 60,
-                  color: Colors.white,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.download, color: Colors.black87),
-                        label: const Text(
-                          "Export to Excel",
-                          style: TextStyle(color: Colors.black87),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black87,
-                          elevation: 0,
-                          side: BorderSide(color: Colors.grey[300]!),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 12 : 20,
-                            vertical: isMobile ? 8 : 12,
-                          ),
-                          textStyle: TextStyle(
-                            fontSize: isMobile ? 13 : 15,
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                        onPressed: exportToExcel,
-                      ),
-                      const SizedBox(width: 14),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          side: BorderSide(color: Colors.grey[300]!),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 10 : 18,
-                            vertical: isMobile ? 7 : 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          textStyle: TextStyle(
-                            fontWeight: FontWeight.normal,
-                            fontSize: isMobile ? 12 : 14,
-                          ),
-                        ),
-                        icon: const Icon(Icons.help_outline, size: 18, color: Colors.black87),
-                        label: Text(
-                          "Aggregator Help Center",
-                          style: TextStyle(
-                            color: Colors.black87,
-                            fontSize: isMobile ? 12 : 14,
-                            fontWeight: FontWeight.normal,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        onPressed: () {},
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : SingleChildScrollView(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isMobile ? 8 : 24,
-                        vertical: isMobile ? 10 : 18,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Material(
-                            elevation: 0,
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                      top: isMobile ? 6 : 8,
-                                      left: isMobile ? 5 : 10,
-                                      bottom: isMobile ? 4 : 6),
-                                  child: Text(
-                                    "Online Orders Activity",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: isMobile ? 15 : 18,
-                                        color: Colors.black),
-                                  ),
-                                ),
-                                TabBar(
-                                  controller: _tabController,
-                                  isScrollable: true,
-                                  indicatorColor: const Color(0xFFD5282B),
-                                  labelColor: Colors.black,
-                                  unselectedLabelColor: Colors.grey,
-                                  labelStyle: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: isMobile ? 13 : 15,
-                                  ),
-                                  tabs: [
-                                    _tabIconLabel(Icons.grid_view_rounded, "All"),
-                                    _tabImageLabel("assets/images/zomato.png", "zomato"),
-                                    _tabImageLabel("assets/images/SWIGGY.png", "Swiggy"),
-                                    _tabIconLabel(Icons.cloud, "Online"),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F8FE),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                  vertical: isMobile ? 12 : 18,
-                                  horizontal: isMobile ? 8 : 20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      InkWell(
-                                        onTap: () => setState(() => showChart = !showChart),
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          padding: EdgeInsets.symmetric(
-                                              horizontal: isMobile ? 6 : 10,
-                                              vertical: isMobile ? 2 : 5),
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.show_chart,
-                                                  color: const Color(0xFF3498F3),
-                                                  size: isMobile ? 22 : 30),
-                                              SizedBox(width: isMobile ? 4 : 8),
-                                              Text(
-                                                "Last 7 Days Orders",
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: isMobile ? 13 : 17,
-                                                    color: Colors.black),
-                                              ),
-                                              SizedBox(width: isMobile ? 2 : 5),
-                                              Text(
-                                                showChart ? "(Hide Chart)" : "(View Chart)",
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.w500,
-                                                    fontSize: isMobile ? 11 : 13,
-                                                    color: Colors.grey),
-                                              ),
-                                              Icon(
-                                                  showChart
-                                                      ? Icons.arrow_drop_up
-                                                      : Icons.arrow_drop_down,
-                                                  color: Colors.grey),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (showChart)
-                                    Padding(
-                                      padding: EdgeInsets.only(top: isMobile ? 8 : 16, bottom: isMobile ? 8 : 16),
-                                      child: simpleBarChart,
-                                    ),
-                                  // FILTERS ROW
-                                  SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        _filterDropdown(
-                                          context,
-                                          title: "Select Restaurant",
-                                          value: selectedRestaurant,
-                                          items: restaurantList,
-                                          onChanged: (v) => setState(() => selectedRestaurant = v),
-                                          width: isMobile ? 160 : 220,
-                                        ),
-                                        SizedBox(width: isMobile ? 8 : 16),
-                                        _filterDropdown(
-                                          context,
-                                          title: "Record Type",
-                                          value: selectedRecordType,
-                                          items: [
-                                            "Last 2 days records",
-                                            "Last 7 days records",
-                                            "Today",
-                                            "Custom Date Range"
-                                          ],
-                                          onChanged: _handleRecordTypeChange,
-                                          width: isMobile ? 140 : 200,
-                                        ),
-                                        SizedBox(width: isMobile ? 8 : 16),
-                                        _filterDropdown(
-                                          context,
-                                          title: "Status",
-                                          value: selectedStatus,
-                                          items: [
-                                            "All",
-                                            "Food Ready",
-                                            "Pick Up",
-                                            "Delivered"
-                                          ],
-                                          onChanged: (v) => setState(() => selectedStatus = v),
-                                          width: isMobile ? 120 : 150,
-                                        ),
-                                        SizedBox(width: isMobile ? 8 : 16),
-                                        _filterTextField(context, "Order No.", orderNoController, width: isMobile ? 100 : 150),
-                                        SizedBox(width: isMobile ? 8 : 16),
-                                        SizedBox(
-                                          height: 40,
-                                          child: ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFFD5282B),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(7),
-                                              ),
-                                            ),
-                                            onPressed: applyFilters,
-                                            child: Text(
-                                              "Search",
-                                              style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: isMobile ? 12 : 15),
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(width: isMobile ? 8 : 16),
-                                        SizedBox(
-                                          height: 40,
-                                          child: OutlinedButton(
-                                            style: OutlinedButton.styleFrom(
-                                              side: const BorderSide(
-                                                  color: Color(0xFFD5282B)),
-                                              backgroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(7),
-                                              ),
-                                            ),
-                                            onPressed: showAll,
-                                            child: Text(
-                                              "Show All",
-                                              style: TextStyle(
-                                                  color: const Color(0xFFD5282B),
-                                                  fontSize: isMobile ? 12 : 15),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                        minHeight: isMobile ? 200 : 300,
-                                        maxHeight: isMobile ? 400 : 800),
-                                    child: TabBarView(
-                                      controller: _tabController,
-                                      children: [
-                                        _buildOrderTable(isMobile: isMobile, channel: "All"),
-                                        _buildOrderTable(isMobile: isMobile, channel: "Zomato"),
-                                        _buildOrderTable(isMobile: isMobile, channel: "Swiggy"),
-                                        _buildOrderTable(isMobile: isMobile, channel: "Online"),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+          ],
+        ),
       ),
     );
   }
 
-  Tab _tabIconLabel(IconData icon, String label) {
-    return Tab(
-      child: Row(
-        children: [
-          Icon(icon, size: 22),
-          const SizedBox(width: 5),
-          Text(label, overflow: TextOverflow.ellipsis),
-        ],
-      ),
-    );
-  }
-
-  Tab _tabImageLabel(String asset, String label) {
-    return Tab(
-      child: Row(
-        children: [
-          Image.asset(asset, width: 22, height: 22),
-          const SizedBox(width: 5),
-          Text(label, overflow: TextOverflow.ellipsis),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterDropdown(
-      BuildContext context, {
-        required String title,
-        required String? value,
-        required List<String> items,
-        required ValueChanged<String?> onChanged,
-        double width = 150,
-      }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontSize: 12)),
-        const SizedBox(height: 4),
+  Widget _buildDesktopSelector(Set<String> brandNames) {
+    return Row(children: [
+      const SizedBox(width: 70),
+      if (!hasOnlyOneDb)
         Container(
-          width: width,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(8),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0)), borderRadius: BorderRadius.circular(12), color: Colors.white),
+          constraints: const BoxConstraints(minWidth: 160, maxWidth: 220),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: value,
-              isExpanded: true,
-              icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
-              items: items
-                  .map((r) => DropdownMenuItem(
-                value: r,
-                child: Text(
-                  r,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ))
-                  .toList(),
-              onChanged: onChanged,
+              value: selectedBrand, isExpanded: true,
+              items: [const DropdownMenuItem(value: "All", child: Text("All Outlets")), ...brandNames.map((b) => DropdownMenuItem(value: b, child: Text(b)))],
+              onChanged: (v) { setState(() => selectedBrand = v); fetchOnlineOrders(); },
             ),
           ),
-        ),
-      ],
+        )
+      else
+        Padding(padding: const EdgeInsets.only(left: 12), child: Text(widget.dbToBrandMap.values.first, style: const TextStyle(fontWeight: FontWeight.w500))),
+    ]);
+  }
+
+  Widget _buildIconButton(IconData icon, VoidCallback onTap) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      decoration: BoxDecoration(color: const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(10)),
+      child: IconButton(icon: Icon(icon, color: const Color(0xFF7F8C8D), size: 20), onPressed: onTap),
     );
   }
 
-  Widget _filterTextField(BuildContext context, String title, TextEditingController controller, {double width = 120}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontSize: 12)),
-        const SizedBox(height: 4),
-        Container(
-          width: width,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              hintText: "",
-            ),
-            style: const TextStyle(fontSize: 13),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOrderTable({required bool isMobile, required String channel}) {
-    final rowsToShow = channel == "All"
-        ? displayedRecords
-        : displayedRecords.where((row) {
-      final order = row['record'] as OnlineOrderReport;
-      return order.orderFrom.toLowerCase().contains(channel.toLowerCase());
-    }).toList();
-
-    if (rowsToShow.isEmpty) {
-      return Center(child: Text('No data for $channel'));
-    }
-    return Material(
+  Widget _buildChannelFilterBar() {
+    return Container(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: [
-            _tableCol("Order No.", isMobile),
-            _tableCol("Outlet Name", isMobile),
-            _tableCol("Order Type", isMobile),
-            _tableCol("Customer", isMobile),
-            _tableCol("Phone", isMobile),
-            _tableCol("Date Time", isMobile),
-            _tableCol("Gross", isMobile),
-            _tableCol("Net", isMobile),
-            _tableCol("Status", isMobile),
-            _tableCol("Channel", isMobile),
-          ],
-          rows: rowsToShow.map((row) {
-            final order = row['record'] as OnlineOrderReport;
-            return DataRow(
-              cells: [
-                DataCell(Text(order.onlineOrderId)),
-                DataCell(Text(order.restaurantName)),
-                DataCell(Text(order.orderType)),
-                DataCell(Text(order.customerName)),
-                DataCell(Text(order.phoneNumber)),
-                DataCell(Text(order.orderDateTime.toString())),
-                DataCell(Text(order.grossAmount.toStringAsFixed(3))),
-                DataCell(Text(order.netAmount.toStringAsFixed(3))),
-                DataCell(Text(order.status)),
-                DataCell(Text(order.orderFrom)),
-              ],
-            );
-          }).toList(),
-        ),
+      child: TabBar(
+        controller: _tabController,
+        labelColor: const Color(0xFF4154F1),
+        unselectedLabelColor: const Color(0xFF7F8C8D),
+        indicatorColor: const Color(0xFF4154F1),
+        indicatorWeight: 3,
+        tabs: const [Tab(text: "All Orders"), Tab(text: "Zomato"), Tab(text: "Swiggy"), Tab(text: "Direct Online")],
       ),
     );
   }
 
-  DataColumn _tableCol(String label, bool isMobile) {
-    return DataColumn(
-      label: Text(
-        label,
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: isMobile ? 10 : 13),
-        overflow: TextOverflow.ellipsis,
+  Widget _buildSummaryRow() {
+    final data = barChartData;
+    return IntrinsicHeight(
+      child: Row(
+        children: [
+          Expanded(child: _buildCompactStat("Zomato", "${data["Zomato"]!.fold(0, (a, b) => a + b)}", const Color(0xFFC8102E))),
+          const SizedBox(width: 16),
+          Expanded(child: _buildCompactStat("Swiggy", "${data["Swiggy"]!.fold(0, (a, b) => a + b)}", const Color(0xFFFF8C1A))),
+          const SizedBox(width: 16),
+          Expanded(child: _buildCompactStat("Direct Online", "${data["Online"]!.fold(0, (a, b) => a + b)}", const Color(0xFF4154F1))),
+        ],
       ),
+    );
+  }
+
+  Widget _buildCompactStat(String title, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.2))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(color: Color(0xFF7F8C8D), fontSize: 12, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
+      ]),
+    );
+  }
+
+  // FIXED FILTER SECTION - This is the main fix for the overflow error
+  Widget _buildFilterSection(bool isMobile, List<String> restaurantList) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text("Filters", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Spacer(),
+          TextButton.icon(
+              onPressed: () => setState(() => showChart = !showChart),
+              icon: Icon(showChart ? Icons.visibility_off : Icons.visibility),
+              label: Text(showChart ? "Hide Chart" : "Show Chart")
+          ),
+        ]),
+        const SizedBox(height: 16),
+
+        // FIXED: Replaced Wrap with Row inside SingleChildScrollView for proper horizontal scrolling
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate approximate total width needed
+            double totalWidth = 180 * 4 + 16 * 4 + 120; // 4 dropdowns (180 each) + 4 spacings (16 each) + button (approx 120)
+
+            if (constraints.maxWidth < totalWidth) {
+              // Not enough space - use horizontal scrolling
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildModernDropdown("Select Restaurant", selectedRestaurant, restaurantList, (v) => setState(() => selectedRestaurant = v)),
+                    const SizedBox(width: 16),
+                    _buildModernDropdown("Record Type", selectedRecordType, ["Last 2 days records", "Last 7 days records", "Today", "Custom Date Range"], _handleRecordTypeChange),
+                    const SizedBox(width: 16),
+                    _buildModernDropdown("Status", selectedStatus, ["All", "Food Ready", "Pick Up", "Delivered"], (v) => setState(() => selectedStatus = v)),
+                    const SizedBox(width: 16),
+                    _buildModernTextField("Order ID", orderNoController),
+                    const SizedBox(width: 16),
+                    ElevatedButton(
+                        onPressed: applyFilters,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4154F1),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16)
+                        ),
+                        child: const Text("Search", style: TextStyle(color: Colors.white))
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              // Enough space - use Wrap for natural layout
+              return Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                children: [
+                  _buildModernDropdown("Select Restaurant", selectedRestaurant, restaurantList, (v) => setState(() => selectedRestaurant = v)),
+                  _buildModernDropdown("Record Type", selectedRecordType, ["Last 2 days records", "Last 7 days records", "Today", "Custom Date Range"], _handleRecordTypeChange),
+                  _buildModernDropdown("Status", selectedStatus, ["All", "Food Ready", "Pick Up", "Delivered"], (v) => setState(() => selectedStatus = v)),
+                  _buildModernTextField("Order ID", orderNoController),
+                  ElevatedButton(
+                      onPressed: applyFilters,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4154F1),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16)
+                      ),
+                      child: const Text("Search", style: TextStyle(color: Colors.white))
+                  ),
+                ],
+              );
+            }
+          },
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildModernDropdown(String label, String? value, List<String> items, Function(String?) onChanged) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF7F8C8D))),
+      const SizedBox(height: 8),
+      Container(
+          width: 180,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(10)
+          ),
+          child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                  value: value,
+                  isExpanded: true,
+                  hint: Text(label, style: const TextStyle(fontSize: 12)),
+                  items: items.map((e) => DropdownMenuItem(
+                      value: e,
+                      child: Text(e, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)
+                  )).toList(),
+                  onChanged: onChanged
+              )
+          )
+      ),
+    ]);
+  }
+
+  Widget _buildModernTextField(String label, TextEditingController controller) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF7F8C8D))),
+      const SizedBox(height: 8),
+      SizedBox(
+          width: 180,
+          height: 48,
+          child: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                  hintText: "ID",
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFE0E0E0))
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFE0E0E0))
+                  )
+              )
+          )
+      ),
+    ]);
+  }
+
+  Widget _buildTableContainer(double screenWidth) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Padding(
+            padding: EdgeInsets.all(20),
+            child: Text("Order Details", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: screenWidth - 48),
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(const Color(0xFFF5F7FA)),
+              columns: const [
+                DataColumn(label: Text("Order ID")),
+                DataColumn(label: Text("Channel")),
+                DataColumn(label: Text("Outlet")),
+                DataColumn(label: Text("Date")),
+                DataColumn(label: Text("Amount")),
+                DataColumn(label: Text("Status"))
+              ],
+              rows: displayedRecords.take(50).map((row) {
+                final k = row['record'] as OnlineOrderReport;
+                return DataRow(cells: [
+                  DataCell(Text(k.onlineOrderId)),
+                  DataCell(Text(k.orderFrom)),
+                  DataCell(Text(k.restaurantName)),
+                  DataCell(Text(DateFormat('dd MMM, hh:mm a').format(k.orderDateTime))),
+                  DataCell(Text("₹${k.grossAmount.toStringAsFixed(2)}")),
+                  DataCell(_buildStatusBadge(k.status))
+                ]);
+              }).toList(),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    Color c = Colors.grey;
+    if (status.toLowerCase().contains("delivered")) c = Colors.green;
+    else if (status.toLowerCase().contains("ready")) c = Colors.orange;
+    return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(color: c.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+        child: Text(
+            status.toUpperCase(),
+            style: TextStyle(color: c, fontSize: 10, fontWeight: FontWeight.bold)
+        )
     );
   }
 }
