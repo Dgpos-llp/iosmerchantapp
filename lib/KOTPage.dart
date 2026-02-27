@@ -7,6 +7,8 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'main.dart' as app;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 class KOTPage extends StatefulWidget {
   final Map<String, String> dbToBrandMap;
@@ -136,10 +138,41 @@ class _KOTPageState extends State<KOTPage> {
       sheet.appendRow([]); rowIndex++;
     }
 
-    final directory = await getApplicationDocumentsDirectory();
-    final filePath = '${directory.path}/KOTSummaryReport.xlsx';
-    final file = File(filePath)..createSync(recursive: true)..writeAsBytesSync(excelFile.encode()!);
-    OpenFile.open(filePath);
+    final fileBytes = excelFile.encode();
+
+    if (kIsWeb) {
+      // WEB PLATFORM
+      final blob = html.Blob([fileBytes!]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'KOTSummaryReport.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel downloaded successfully')),
+        );
+      }
+    } else {
+      // DESKTOP (Windows, Mac, Linux) AND ANDROID
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/KOTSummaryReport.xlsx';
+      final file = File(filePath)..createSync(recursive: true)..writeAsBytesSync(fileBytes!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel saved to $filePath')),
+        );
+      }
+
+      // Only try to open the file on desktop platforms
+      if (!kIsWeb) {
+        try {
+          await OpenFile.open(filePath);
+        } catch (_) {}
+      }
+    }
   }
 
   static double _sumNoOfItemDouble(String? itemsStr) {

@@ -78,7 +78,7 @@ class UserData {
     };
   }
 
-  // --- API FUNCTIONS ---
+  // --- API FUNCTIONS (ALL ORIGINAL CODE PRESERVED) ---
   static Future<List<UserData>> fetchUsers(Config config) async {
     final url = "${config.apiUrl}${config.clientCode}/getAll?DB=${config.clientCode}";
     final response = await http.get(Uri.parse(url), headers: getHeaders());
@@ -110,13 +110,12 @@ class UserData {
       Config config, List<String> dbNames, String startDate, String endDate) async {
     final Map<String, TotalSalesReport> dbToTotalSalesMap = {};
 
-    // FIX: Changed "totalsale" to "totalsales" to match your curl
     final dbParams = dbNames.map((db) => "DB=$db").join("&");
     final url = "${config.apiUrl}report/totalsale?startDate=$startDate&endDate=$endDate&$dbParams";
 
     try {
       final response = await http.get(Uri.parse(url), headers: getHeaders());
-      print("📡 Status: ${response.statusCode} | Body: ${response.body}"); // Debug line
+      print("📡 Status: ${response.statusCode} | Body: ${response.body}");
 
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
@@ -129,6 +128,7 @@ class UserData {
     }
     return dbToTotalSalesMap;
   }
+
   static Future<List<TimeslotSales>> fetchTimeslotSalesForDbs(Config config, List<String> dbNames, String startDate, String endDate) async {
     final dbParams = dbNames.map((db) => "DB=$db").join("&");
     final url = "${config.apiUrl}report/timeslotsale?startDate=$startDate&endDate=$endDate&$dbParams";
@@ -218,7 +218,6 @@ class UserData {
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
 
-        // FIX 1: If the server returns a Map grouped by DB name
         if (decoded is Map<String, dynamic>) {
           decoded.forEach((db, itemsJson) {
             if (itemsJson is List) {
@@ -226,9 +225,7 @@ class UserData {
             }
           });
         }
-        // FIX 2: If the server returns a direct List (as seen in your curl)
         else if (decoded is List) {
-          // If it's a direct list, we associate it with the first DB name in your request
           final String primaryDb = dbNames.isNotEmpty ? dbNames.first : "ALL";
           dbToItemwiseMap[primaryDb] = decoded.map((e) => ItemwiseReport.fromJson(e)).toList();
         }
@@ -238,6 +235,7 @@ class UserData {
     }
     return dbToItemwiseMap;
   }
+
   static Future<Map<String, List<ComplimentReport>>> fetchComplimentForDbs(Config config, List<String> dbNames, String startDate, String endDate) async {
     final Map<String, List<ComplimentReport>> dbToComplimentMap = {};
     for (final db in dbNames) {
@@ -296,12 +294,11 @@ class UserData {
 
         if (response.statusCode == 200) {
           final decoded = json.decode(response.body);
-          print("📡 TAX API [$db] Body: ${response.body}"); // CHECK THIS PRINT
+          print("📡 TAX API [$db] Body: ${response.body}");
 
           if (decoded is List) {
             dbToTaxwiseMap[db] = decoded.map<TaxwiseReport>((e) => TaxwiseReport.fromJson(e)).toList();
           } else if (decoded is Map && decoded.containsKey('data')) {
-            // Fallback if your API wraps the list in a 'data' key
             final data = decoded['data'] as List;
             dbToTaxwiseMap[db] = data.map<TaxwiseReport>((e) => TaxwiseReport.fromJson(e)).toList();
           }
@@ -312,6 +309,7 @@ class UserData {
     }
     return dbToTaxwiseMap;
   }
+
   static Future<Map<String, List<SettlementwiseReport>>> fetchSettlementwiseForDbs(Config config, List<String> dbNames, String startDate, String endDate) async {
     final Map<String, List<SettlementwiseReport>> dbToMap = {};
     for (final db in dbNames) {
@@ -456,7 +454,7 @@ class UserData {
   }
 }
 
-// --- APP UI ---
+// --- MODERNIZED APP UI ---
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
@@ -467,7 +465,42 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Poppins',
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFD5282B)),
+        colorScheme: ColorScheme.light(
+          primary: const Color(0xFF4154F1),
+          secondary: const Color(0xFFD5282B),
+          surface: Colors.white,
+          background: const Color(0xFFF8F9FC),
+          error: const Color(0xFFE74C3C),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.grey[50],
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF4154F1), width: 1),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE74C3C), width: 1),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
       ),
       home: const SplashScreen(),
     );
@@ -489,8 +522,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 2))..forward();
-    _logoAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _textAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    _logoAnimation = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
+    _textAnimation = CurvedAnimation(parent: _controller, curve: const Interval(0.5, 1.0, curve: Curves.easeOut));
 
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ResponsiveLoginPage()));
@@ -504,14 +537,70 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ScaleTransition(scale: _logoAnimation, child: Image.asset('assets/images/dposnewlogopn.png', width: 160, height: 160)),
-            const SizedBox(height: 20),
-            FadeTransition(opacity: _textAnimation, child: const Text('Smart POS for Smart Restaurants', style: TextStyle(fontSize: 16, color: Color(0xFF555555)))),
-          ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.topRight,
+            radius: 1.5,
+            colors: [
+              Colors.white,
+              const Color(0xFF4154F1).withOpacity(0.05),
+            ],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ScaleTransition(
+                scale: _logoAnimation,
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4154F1).withOpacity(0.2),
+                        blurRadius: 30,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/images/dposnewlogopn.png',
+                    width: 140,
+                    height: 140,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              FadeTransition(
+                opacity: _textAnimation,
+                child: Column(
+                  children: [
+                    Text(
+                      'Smart POS',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF2C3E50),
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'for Smart Restaurants',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: const Color(0xFF7F8C8D),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -537,8 +626,31 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
   String? errorMessage;
+  bool _isPasswordVisible = false;
+  bool _isLoading = false;
+
+  // Add FocusNodes for keyboard navigation
+  final FocusNode _usernameFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _usernameFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    usernameController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  // Handle field submission
+  void _fieldFocusChange(
+      BuildContext context, FocusNode currentFocus, FocusNode nextFocus) {
+    currentFocus.unfocus();
+    FocusScope.of(context).requestFocus(nextFocus);
+  }
 
   Future<void> login(BuildContext context, WidgetRef ref) async {
+    setState(() => _isLoading = true);
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
     final config = await Config.loadFromAsset();
@@ -563,7 +675,6 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
 
         final users = await UserData.fetchUsers(config);
 
-        // FIX: Match by username only, because database password is encrypted/BCrypt
         final matchedUsers = users.where((u) => u.username.toLowerCase() == username.toLowerCase()).toList();
 
         if (matchedUsers.isNotEmpty) {
@@ -571,64 +682,309 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
           final dbNames = matchedUsers.map((user) => user.dbName).toSet().toList();
           ref.read(dbNamesProvider.notifier).state = dbNames;
           final dbToBrandMap = await UserData.fetchBrandNames(config, dbNames);
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => Dashboard(dbToBrandMap: dbToBrandMap)));
+
+          if (mounted) {
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => Dashboard(dbToBrandMap: dbToBrandMap))
+            );
+          }
         } else {
           print("❌ DEBUG: Mapping Failed. Username '$username' not found in getAll results.");
-          setState(() => errorMessage = "Invalid user mapping found.");
+          setState(() {
+            errorMessage = "Invalid user mapping found.";
+            _isLoading = false;
+          });
         }
       } else {
         print("❌ DEBUG: Auth Failed with code ${response.statusCode}");
-        setState(() => errorMessage = "Invalid username or password.");
+        setState(() {
+          errorMessage = "Invalid username or password.";
+          _isLoading = false;
+        });
       }
     } catch (e) {
       print("🔥 DEBUG Error: $e");
-      setState(() => errorMessage = "Error: $e");
+      setState(() {
+        errorMessage = "Connection error. Please try again.";
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEFEDEB),
+      backgroundColor: const Color(0xFFF8F9FC),
       body: Center(
-        child: Row(
-          children: [
-            Expanded(
-              flex: 1,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Image.asset('assets/images/dposnewlogopn.png', width: 200, height: 150),
-                  Container(width: 550, child: Image.asset('assets/images/login.png', fit: BoxFit.fill, height: 500)),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          padding: const EdgeInsets.all(24),
+          child: Row(
+            children: [
+              // Left side - Branding
+              Expanded(
+                flex: 1,
                 child: Container(
-                  width: 400, padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 10))]),
+                  padding: const EdgeInsets.all(40),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Sign in", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
-                      const SizedBox(height: 20),
-                      TextField(controller: usernameController, decoration: InputDecoration(hintText: "Username", prefixIcon: const Icon(Icons.person, color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[100])),
+                      // Updated: Larger logo without background
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          // Removed background color
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Image.asset(
+                          'assets/images/dposnewlogopn.png',
+                          width: 120, // Increased from 80 to 120
+                          height: 120, // Increased from 80 to 120
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      Text(
+                        'Welcome Back!',
+                        style: TextStyle(
+                          fontSize: 42,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF2C3E50),
+                          height: 1.2,
+                        ),
+                      ),
                       const SizedBox(height: 16),
-                      TextField(controller: passwordController, obscureText: true, decoration: InputDecoration(hintText: "Password", prefixIcon: const Icon(Icons.lock, color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[100])),
-                      const SizedBox(height: 24),
-                      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: () => login(context, ref), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD5282B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                          child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.login, color: Colors.white, size: 20), SizedBox(width: 10), Text("Sign in", style: TextStyle(fontSize: 16, color: Colors.white))]))),
-                      if (errorMessage != null) ...[const SizedBox(height: 10), Text(errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500))],
+                      Text(
+                        'Manage your restaurants, track sales, and monitor operations all in one place.',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: const Color(0xFF7F8C8D),
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      Row(
+                        children: [
+                          _buildFeatureChip(Icons.restaurant, 'Multi-outlet'),
+                          const SizedBox(width: 12),
+                          _buildFeatureChip(Icons.analytics, 'Real-time analytics'),
+                          const SizedBox(width: 12),
+                          _buildFeatureChip(Icons.receipt, 'Smart reporting'),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 40),
+              // Right side - Login Form
+              Expanded(
+                flex: 1,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 30,
+                              offset: const Offset(0, 10),
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFF4154F1).withOpacity(0.1),
+                              blurRadius: 20,
+                              spreadRadius: -5,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Sign In",
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Enter your credentials to access your account",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: const Color(0xFF7F8C8D),
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            // Username field with Enter key navigation
+                            Text(
+                              "Username",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: usernameController,
+                              focusNode: _usernameFocusNode,
+                              enabled: !_isLoading,
+                              decoration: InputDecoration(
+                                hintText: "Enter your username",
+                                prefixIcon: Icon(Icons.person_outline, color: const Color(0xFF7F8C8D), size: 20),
+                              ),
+                              onSubmitted: (_) => _fieldFocusChange(
+                                  context, _usernameFocusNode, _passwordFocusNode),
+                              textInputAction: TextInputAction.next,
+                            ),
+                            const SizedBox(height: 20),
+                            // Password field with Enter key login
+                            Text(
+                              "Password",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: passwordController,
+                              focusNode: _passwordFocusNode,
+                              obscureText: !_isPasswordVisible,
+                              enabled: !_isLoading,
+                              decoration: InputDecoration(
+                                hintText: "Enter your password",
+                                prefixIcon: Icon(Icons.lock_outline, color: const Color(0xFF7F8C8D), size: 20),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                                    color: const Color(0xFF7F8C8D),
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                                ),
+                              ),
+                              onSubmitted: (_) {
+                                _passwordFocusNode.unfocus();
+                                if (!_isLoading) {
+                                  login(context, ref);
+                                }
+                              },
+                              textInputAction: TextInputAction.done,
+                            ),
+                            const SizedBox(height: 24),
+                            // Error message
+                            if (errorMessage != null) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE74C3C).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.error_outline, color: const Color(0xFFE74C3C), size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        errorMessage!,
+                                        style: const TextStyle(
+                                          color: Color(0xFFE74C3C),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                            // Login button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : () => login(context, ref),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4154F1),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                                    : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.login, size: 20),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      "Sign In",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4154F1).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF4154F1)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF4154F1),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -644,8 +1000,31 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
   String? errorMessage;
+  bool _isPasswordVisible = false;
+  bool _isLoading = false;
+
+  // Add FocusNodes for keyboard navigation
+  final FocusNode _usernameFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _usernameFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    usernameController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  // Handle field submission
+  void _fieldFocusChange(
+      BuildContext context, FocusNode currentFocus, FocusNode nextFocus) {
+    currentFocus.unfocus();
+    FocusScope.of(context).requestFocus(nextFocus);
+  }
 
   Future<void> login(BuildContext context, WidgetRef ref) async {
+    setState(() => _isLoading = true);
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
     final config = await Config.loadFromAsset();
@@ -664,47 +1043,204 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
         ref.read(authTokenProvider.notifier).state = data['token'];
 
         final users = await UserData.fetchUsers(config);
-        // FIX: Match by username only
         final matchedUsers = users.where((u) => u.username.toLowerCase() == username.toLowerCase()).toList();
 
         if (matchedUsers.isNotEmpty) {
           final dbNames = matchedUsers.map((user) => user.dbName).toSet().toList();
           ref.read(dbNamesProvider.notifier).state = dbNames;
           final dbToBrandMap = await UserData.fetchBrandNames(config, dbNames);
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => Dashboard(dbToBrandMap: dbToBrandMap)));
+
+          if (mounted) {
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => Dashboard(dbToBrandMap: dbToBrandMap))
+            );
+          }
+        } else {
+          setState(() {
+            errorMessage = "Invalid user mapping found.";
+            _isLoading = false;
+          });
         }
-      } else { setState(() => errorMessage = "Invalid username or password."); }
-    } catch (e) { setState(() => errorMessage = "Error: $e"); }
+      } else {
+        setState(() {
+          errorMessage = "Invalid username or password.";
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = "Connection error. Please try again.";
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEFEDEB),
-      body: SingleChildScrollView(
-        child: Center(
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(left: 10, top: 20, child: Image.asset('assets/images/dposnewlogopn.png', width: 150, height: 150, fit: BoxFit.contain)),
-              Align(alignment: Alignment.center, child: Container(margin: const EdgeInsets.only(top: 140, left: 0, right: 60), padding: const EdgeInsets.all(24), width: 320, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))]),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  SizedBox(width: double.infinity, height: 100, child: Image.asset('assets/images/mobiletop.png', fit: BoxFit.cover)),
-                  const SizedBox(height: 16),
-                  const Text("Sign in", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
-                  const SizedBox(height: 16),
-                  TextField(controller: usernameController, decoration: InputDecoration(hintText: "Username", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[100])),
-                  const SizedBox(height: 16),
-                  TextField(controller: passwordController, obscureText: true, decoration: InputDecoration(hintText: "Password", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[100])),
-                  const SizedBox(height: 24),
-                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: () => login(context, ref), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD5282B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("Sign in", style: TextStyle(fontSize: 16, color: Colors.white)))),
-                  if (errorMessage != null) ...[const SizedBox(height: 10), Text(errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500))],
-                ]),
-              )),
-              Positioned(right: -30, top: 240, child: SizedBox(height: 350, child: Image.asset('assets/images/b.png', fit: BoxFit.contain))),
-              Positioned(right: 10, top: 20, child: Image.asset('assets/images/c.png', width: 100, height: 100, fit: BoxFit.contain)),
-              Positioned(right: 10, bottom: -200, child: ColorFiltered(colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.1), BlendMode.modulate), child: Image.asset('assets/images/d.png', width: 150, height: 150, fit: BoxFit.contain))),
-            ],
+      backgroundColor: const Color(0xFFF8F9FC),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                const SizedBox(height: 40),
+                // Updated: Larger logo without background
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    // Removed background color and shadow
+                    // color: Colors.white,
+                    // shape: BoxShape.circle,
+                    // boxShadow: [...],
+                  ),
+                  child: Image.asset(
+                    'assets/images/dposnewlogopn.png',
+                    width: 120, // Increased from 80 to 120
+                    height: 120, // Increased from 80 to 120
+                  ),
+                ),
+                const SizedBox(height: 30),
+                // Title
+                const Text(
+                  "Welcome Back!",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2C3E50),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Sign in to continue",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: const Color(0xFF7F8C8D),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                // Login Form
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Username field with Enter key navigation
+                      TextField(
+                        controller: usernameController,
+                        focusNode: _usernameFocusNode,
+                        enabled: !_isLoading,
+                        decoration: InputDecoration(
+                          hintText: "Username",
+                          prefixIcon: Icon(Icons.person_outline, color: const Color(0xFF7F8C8D), size: 20),
+                        ),
+                        onSubmitted: (_) => _fieldFocusChange(
+                            context, _usernameFocusNode, _passwordFocusNode),
+                        textInputAction: TextInputAction.next,
+                      ),
+                      const SizedBox(height: 16),
+                      // Password field with Enter key login
+                      TextField(
+                        controller: passwordController,
+                        focusNode: _passwordFocusNode,
+                        obscureText: !_isPasswordVisible,
+                        enabled: !_isLoading,
+                        decoration: InputDecoration(
+                          hintText: "Password",
+                          prefixIcon: Icon(Icons.lock_outline, color: const Color(0xFF7F8C8D), size: 20),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                              color: const Color(0xFF7F8C8D),
+                              size: 20,
+                            ),
+                            onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                          ),
+                        ),
+                        onSubmitted: (_) {
+                          _passwordFocusNode.unfocus();
+                          if (!_isLoading) {
+                            login(context, ref);
+                          }
+                        },
+                        textInputAction: TextInputAction.done,
+                      ),
+                      const SizedBox(height: 24),
+                      // Error message
+                      if (errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE74C3C).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: const Color(0xFFE74C3C), size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  errorMessage!,
+                                  style: const TextStyle(
+                                    color: Color(0xFFE74C3C),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      // Login button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : () => login(context, ref),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4154F1),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                              : const Text(
+                            "Sign In",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

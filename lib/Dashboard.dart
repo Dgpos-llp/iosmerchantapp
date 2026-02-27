@@ -9,6 +9,8 @@ import 'SidePanel.dart';
 import 'main.dart';
 import 'package:merchant/TotalSalesReport.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 class Dashboard extends ConsumerStatefulWidget {
   final Map<String, String> dbToBrandMap;
@@ -1914,17 +1916,51 @@ class _DashboardState extends ConsumerState<Dashboard> {
     rowNum += onlineOrderChannels.length + 2;
 
     final fileBytes = excelFile.encode();
-    final String path = '${Directory.current.path}/DashboardExport_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
-    final file = File(path);
-    await file.writeAsBytes(fileBytes!);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel exported to $path'), backgroundColor: const Color(0xFF27AE60), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+
+    if (kIsWeb) {
+      // WEB PLATFORM
+      final blob = html.Blob([fileBytes!]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'DashboardExport_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Excel downloaded successfully'),
+                backgroundColor: const Color(0xFF27AE60),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+            )
+        );
+      }
+    } else {
+      // DESKTOP (Windows, Mac, Linux) AND ANDROID
+      final String path = '${Directory.current.path}/DashboardExport_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+      final file = File(path);
+      await file.writeAsBytes(fileBytes!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Excel exported to $path'),
+                backgroundColor: const Color(0xFF27AE60),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+            )
+        );
+      }
+
+      // Only try to open the file on desktop platforms
+      try {
+        if (Platform.isWindows) await Process.run('start', [path], runInShell: true);
+        else if (Platform.isMacOS) await Process.run('open', [path]);
+        else if (Platform.isLinux) await Process.run('xdg-open', [path]);
+        // Android will just save the file without opening
+      } catch (_) {}
     }
-    try {
-      if (Platform.isWindows) await Process.run('start', [path], runInShell: true);
-      else if (Platform.isMacOS) await Process.run('open', [path]);
-      else if (Platform.isLinux) await Process.run('xdg-open', [path]);
-    } catch (_) {}
   }
 }
 

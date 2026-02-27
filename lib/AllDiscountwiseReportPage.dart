@@ -5,6 +5,8 @@ import 'package:excel/excel.dart' as excel;
 import 'package:merchant/TotalSalesReport.dart';
 import 'package:merchant/main.dart';
 import 'SidePanel.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 // ---- ColumnsDropdownButton copied here for reuse ----
 class ColumnsDropdownButton extends StatefulWidget {
@@ -336,23 +338,45 @@ class _AllDiscountwiseReportPageState extends State<AllDiscountwiseReportPage> {
     }
 
     final fileBytes = excelFile.encode();
-    final String path = '${Directory.current.path}/AllDiscountwiseReport.xlsx';
-    final file = File(path);
-    await file.writeAsBytes(fileBytes!);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel exported to $path')));
-    }
+    if (kIsWeb) {
+      // WEB PLATFORM
+      final blob = html.Blob([fileBytes!]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'AllDiscountwiseReport.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
 
-    try {
-      if (Platform.isWindows) {
-        await Process.run('start', [path], runInShell: true);
-      } else if (Platform.isMacOS) {
-        await Process.run('open', [path]);
-      } else if (Platform.isLinux) {
-        await Process.run('xdg-open', [path]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel downloaded successfully')),
+        );
       }
-    } catch (_) {}
+    } else {
+      // DESKTOP (Windows, Mac, Linux) AND ANDROID
+      final String path = '${Directory.current.path}/AllDiscountwiseReport.xlsx';
+      final file = File(path);
+      await file.writeAsBytes(fileBytes!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel exported to $path')),
+        );
+      }
+
+      // Only try to open the file on desktop platforms
+      try {
+        if (Platform.isWindows) {
+          await Process.run('start', [path], runInShell: true);
+        } else if (Platform.isMacOS) {
+          await Process.run('open', [path]);
+        } else if (Platform.isLinux) {
+          await Process.run('xdg-open', [path]);
+        }
+        // Android will just save the file without opening
+      } catch (_) {}
+    }
   }
 
   @override

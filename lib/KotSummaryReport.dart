@@ -1,3 +1,4 @@
+//no changes
 class KotSummaryReport {
   final String? kotId;
   final String? orderType;

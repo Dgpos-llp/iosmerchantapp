@@ -7,6 +7,8 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'main.dart' as app;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 // --- CHART COMPONENT ---
 class SimpleBarChart extends StatelessWidget {
@@ -228,10 +230,41 @@ class _OnlineOrderRunningPageState extends State<OnlineOrderRunningPage> with Si
       sheet.appendRow([]); rowIndex++;
     }
 
-    final directory = await getApplicationDocumentsDirectory();
-    final filePath = '${directory.path}/OnlineOrderReport.xlsx';
-    final file = File(filePath)..writeAsBytesSync(excelFile.encode()!);
-    OpenFile.open(filePath);
+    final fileBytes = excelFile.encode();
+
+    if (kIsWeb) {
+      // WEB PLATFORM
+      final blob = html.Blob([fileBytes!]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'OnlineOrderReport.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel downloaded successfully')),
+        );
+      }
+    } else {
+      // DESKTOP (Windows, Mac, Linux) AND ANDROID
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/OnlineOrderReport.xlsx';
+      final file = File(filePath)..writeAsBytesSync(fileBytes!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel saved to $filePath')),
+        );
+      }
+
+      // Only try to open the file on desktop platforms
+      if (!kIsWeb) {
+        try {
+          await OpenFile.open(filePath);
+        } catch (_) {}
+      }
+    }
   }
 
   Future<void> _handleRecordTypeChange(String? v) async {

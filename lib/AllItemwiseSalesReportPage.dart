@@ -6,6 +6,8 @@ import 'package:excel/excel.dart' as excel;
 import 'package:merchant/TotalSalesReport.dart';
 import 'SidePanel.dart';
 import 'main.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 class AllItemwiseSalesReportPage extends StatefulWidget {
   final Map<String, String> dbToBrandMap;
@@ -20,12 +22,17 @@ class _AllItemwiseSalesReportPageState extends State<AllItemwiseSalesReportPage>
   DateTime _endDate = DateTime.now();
   String? selectedDbKey = "All";
 
-  final List<_Col> _allColumns = [
-    const _Col('Restaurants', 'restaurant'),
-    const _Col('Product Name', 'productName'),
-    const _Col('Product Code', 'productCode'),
-    const _Col('Qty Sold', 'totalQntSold'),
-    const _Col('Total Sale Amount', 'totalSaleAmount'),
+  // Animation states
+  bool _isHoveringRefresh = false;
+  bool _isHoveringColumns = false;
+  bool _isHoveringExport = false;
+
+  final List<_Col> _allColumns = const [
+    _Col('Restaurants', 'restaurant'),
+    _Col('Product Name', 'productName'),
+    _Col('Product Code', 'productCode'),
+    _Col('Qty Sold', 'totalQntSold'),
+    _Col('Total Sale Amount', 'totalSaleAmount'),
   ];
   late List<_Col> _visibleColumns;
 
@@ -48,6 +55,13 @@ class _AllItemwiseSalesReportPageState extends State<AllItemwiseSalesReportPage>
       selectedDbKey = "All";
     }
     _fetchData();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScroll.dispose();
+    _verticalScroll.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchData() async {
@@ -122,7 +136,22 @@ class _AllItemwiseSalesReportPageState extends State<AllItemwiseSalesReportPage>
   void _toggleColumn(_Col col, bool value) {
     setState(() {
       if (value) {
-        if (!_visibleColumns.contains(col)) _visibleColumns.add(col);
+        if (!_visibleColumns.contains(col)) {
+          // Find original index in allColumns and insert at that position
+          int originalIndex = _allColumns.indexOf(col);
+          int insertIndex = 0;
+
+          // Find where to insert based on original order
+          for (int i = 0; i < _visibleColumns.length; i++) {
+            int currentOriginalIndex = _allColumns.indexOf(_visibleColumns[i]);
+            if (currentOriginalIndex > originalIndex) {
+              break;
+            }
+            insertIndex++;
+          }
+
+          _visibleColumns.insert(insertIndex, col);
+        }
       } else {
         _visibleColumns.remove(col);
       }
@@ -136,7 +165,7 @@ class _AllItemwiseSalesReportPageState extends State<AllItemwiseSalesReportPage>
 
     int rowNum = 0;
     final reportCell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowNum));
-    reportCell.value = "Itemwise Wise";
+    reportCell.value = "Itemwise Sales Report";
     reportCell.cellStyle = boldStyle;
     rowNum += 2;
 
@@ -190,220 +219,634 @@ class _AllItemwiseSalesReportPageState extends State<AllItemwiseSalesReportPage>
     }
 
     final fileBytes = excelFile.encode();
-    final String path = '${Directory.current.path}/ItemwiseWiseReport.xlsx';
-    final file = File(path);
-    await file.writeAsBytes(fileBytes!);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel exported to $path')));
-    try {
-      if (Platform.isWindows) await Process.run('start', [path], runInShell: true);
-      else if (Platform.isMacOS) await Process.run('open', [path]);
-      else if (Platform.isLinux) await Process.run('xdg-open', [path]);
-    } catch (_) {}
+
+    if (kIsWeb) {
+      // WEB PLATFORM
+      final blob = html.Blob([fileBytes!]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'ItemwiseSalesReport.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Excel downloaded successfully'),
+              backgroundColor: const Color(0xFF27AE60),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            )
+        );
+      }
+    } else {
+      // DESKTOP (Windows, Mac, Linux) AND ANDROID
+      final String path = '${Directory.current.path}/ItemwiseSalesReport.xlsx';
+      final file = File(path);
+      await file.writeAsBytes(fileBytes!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Excel exported successfully'),
+              backgroundColor: const Color(0xFF27AE60),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            )
+        );
+      }
+
+      // Only try to open the file on desktop platforms
+      try {
+        if (Platform.isWindows) await Process.run('start', [path], runInShell: true);
+        else if (Platform.isMacOS) await Process.run('open', [path]);
+        else if (Platform.isLinux) await Process.run('xdg-open', [path]);
+        // Android will just save the file without opening
+      } catch (_) {}
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final bool isHeaderMobile = size.width < 700;
+    final bool isMobile = size.width < 600;
+
     final dbKeys = widget.dbToBrandMap.keys.toList();
     final brandDropdownItems = ["All", ...dbKeys];
     final brandDisplayMap = {"All": "All Outlets", ...{for (final db in dbKeys) db: widget.dbToBrandMap[db]!}};
     String safeSelectedDbKey = brandDropdownItems.contains(selectedDbKey) ? selectedDbKey! : "All";
-    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return SidePanel(
       dbToBrandMap: widget.dbToBrandMap,
       child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            titleSpacing: 0,
-            automaticallyImplyLeading: false,
-            title: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  if (!hasOnlyOneDb)
-                    Container(
-                      margin: const EdgeInsets.only(left: 50, right: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(6)),
-                      constraints: const BoxConstraints(minWidth: 100, maxWidth: 190),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: safeSelectedDbKey,
-                          isExpanded: true,
-                          items: brandDropdownItems.map((db) => DropdownMenuItem(value: db, child: Text(brandDisplayMap[db]!))).toList(),
-                          onChanged: (value) { setState(() => selectedDbKey = value); _fetchData(); },
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      margin: const EdgeInsets.only(left: 50, right: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(6)),
-                      child: Text(singleBrandName ?? ""),
-                    ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.refresh, size: 18, color: Colors.black87),
-                    label: const Text(""),
-                    onPressed: _fetchData,
-                  ),
-                  Padding(
-                    padding: EdgeInsets.only(left: isMobile ? 150 : 900),
-                    child: Image.asset('assets/images/logo.jpg', height: isMobile ? 32 : 40),
-                  ),
-                ],
-              ),
-            ),
+        backgroundColor: const Color(0xFFF5F7FA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          toolbarHeight: 70,
+          automaticallyImplyLeading: false,
+          centerTitle: true,
+          title: const Text(
+            "Itemwise Sales Report",
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50)),
           ),
+          leadingWidth: isHeaderMobile ? 80 : 380,
+          leading: isHeaderMobile ? null : _buildDesktopSelector(brandDropdownItems, brandDisplayMap, safeSelectedDbKey),
+          actions: [
+            _buildIconButton(
+              icon: Icons.refresh,
+              onPressed: _fetchData,
+              isHovering: _isHoveringRefresh,
+              onHover: (value) => setState(() => _isHoveringRefresh = value),
+            ),
+            const SizedBox(width: 16),
+          ],
         ),
         body: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Icon(Icons.home, color: Colors.grey, size: 18),
-                  const SizedBox(width: 7),
-                  GestureDetector(onTap: () => Navigator.pop(context), child: const Text("Reports", style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline))),
-                  const Icon(Icons.chevron_right, color: Colors.grey),
-                  const Text("Itemwise Wise", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-            Container(
-              color: const Color(0xFFF3F3F3),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      _dateFilter("Start Date", _startDate, (d) { setState(() => _startDate = d); _fetchData(); }),
-                      const SizedBox(width: 18),
-                      _dateFilter("End Date", _endDate, (d) { setState(() => _endDate = d); _fetchData(); }),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _dropdownFilter("Restaurants", brandDropdownItems, safeSelectedDbKey, (val) { setState(() => selectedDbKey = val); _fetchData(); }, brandDisplayMap),
-                      const SizedBox(width: 16),
-                      ElevatedButton.icon(onPressed: _fetchData, icon: const Icon(Icons.search), label: const Text("Search"), style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white)),
-                    ],
-                  )
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  ColumnsDropdownButton(allColumns: _allColumns, visibleColumns: _visibleColumns, onToggleColumn: _toggleColumn),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(onPressed: _exportExcel, icon: const Icon(Icons.file_download), label: const Text("Excel"), style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white)),
-                ],
-              ),
-            ),
+            _buildBreadcrumb(),
+            _buildFilterSection(brandDropdownItems, brandDisplayMap, safeSelectedDbKey, isMobile),
             Expanded(
-              child: _loading ? const Center(child: CircularProgressIndicator()) : Scrollbar(
-                controller: _horizontalScroll,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  controller: _horizontalScroll,
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: _visibleColumns.length * 180,
-                    child: Column(
-                      children: [
-                        _buildHeaderRow(56.0),
-                        Expanded(
-                          child: ListView.builder(
-                            controller: _verticalScroll,
-                            itemCount: _allRows.length,
-                            itemExtent: 48.0,
-                            itemBuilder: (context, i) {
-                              final row = _allRows[i];
-                              return Row(children: _visibleColumns.map((col) => Container(
-                                width: 180, height: 48, alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 8),
-                                decoration: BoxDecoration(color: i % 2 == 0 ? Colors.white : Colors.grey[100], border: Border(right: BorderSide(color: Colors.grey[300]!), bottom: BorderSide(color: Colors.grey[300]!))),
-                                child: Text(row.getField(col.key).toString()),
-                              )).toList());
-                            },
-                          ),
-                        ),
-                        _buildTotalRow(48.0),
-                      ],
+              child: _loading
+                  ? const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4154F1)),
+                ),
+              )
+                  : Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: _buildTable(size.width),
                 ),
               ),
-            )
+            ),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildDesktopSelector(List<String> items, Map<String, String> displayMap, String selected) {
+    return Row(
+      children: [
+        const SizedBox(width: 70),
+        if (!hasOnlyOneDb)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white,
+            ),
+            constraints: const BoxConstraints(minWidth: 160, maxWidth: 220),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selected,
+                hint: const Text(
+                  "All Outlets",
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50)),
+                ),
+                icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF7F8C8D)),
+                isExpanded: true,
+                items: items.map((db) => DropdownMenuItem(
+                  value: db,
+                  child: Text(
+                    displayMap[db]!,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50)),
+                  ),
+                )).toList(),
+                onChanged: (value) {
+                  setState(() => selectedDbKey = value);
+                  _fetchData();
+                },
+              ),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(
+              singleBrandName ?? "",
+              style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required bool isHovering,
+    required Function(bool) onHover,
+  }) {
+    return MouseRegion(
+      onEnter: (_) => onHover(true),
+      onExit: (_) => onHover(false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: isHovering ? (Matrix4.identity()..scale(1.05)) : Matrix4.identity(),
+        child: IconButton(
+          icon: Icon(icon, color: isHovering ? const Color(0xFF4154F1) : const Color(0xFF7F8C8D)),
+          style: IconButton.styleFrom(
+            backgroundColor: isHovering ? const Color(0xFF4154F1).withOpacity(0.1) : Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.all(10),
+          ),
+          onPressed: onPressed,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumb() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.home, color: const Color(0xFF7F8C8D), size: 16),
+          const SizedBox(width: 7),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Text(
+              "Reports",
+              style: TextStyle(
+                color: const Color(0xFF7F8C8D),
+                decoration: TextDecoration.underline,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Icon(Icons.chevron_right, color: const Color(0xFF7F8C8D), size: 16),
+          Text(
+            "Itemwise Sales",
+            style: TextStyle(
+              color: const Color(0xFF4154F1),
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterSection(List<String> items, Map<String, String> displayMap, String selected, bool isMobile) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), // Reduced vertical padding
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Calculate total width needed for all filters + buttons
+          double totalWidth = 150 * 3 + 16 * 4 + 350; // 3 dropdowns + spacings + buttons
+
+          if (constraints.maxWidth < totalWidth) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildDateFilter("Start Date", _startDate),
+                  const SizedBox(width: 16),
+                  _buildDateFilter("End Date", _endDate),
+                  const SizedBox(width: 16),
+                  if (!hasOnlyOneDb) _buildDropdownFilter("Outlet", items, selected, displayMap),
+                  const SizedBox(width: 16),
+                  _buildActionButtons(),
+                ],
+              ),
+            );
+          } else {
+            return Row(
+              children: [
+                _buildDateFilter("Start Date", _startDate),
+                const SizedBox(width: 16),
+                _buildDateFilter("End Date", _endDate),
+                const SizedBox(width: 16),
+                if (!hasOnlyOneDb) _buildDropdownFilter("Outlet", items, selected, displayMap),
+                const SizedBox(width: 16),
+                _buildActionButtons(),
+              ],
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildDateFilter(String label, DateTime date) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF7F8C8D)),
+        ),
+        const SizedBox(height: 4), // Reduced spacing
+        InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: date,
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2100),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(
+                      primary: Color(0xFF4154F1),
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (picked != null) {
+              setState(() {
+                if (label == "Start Date") {
+                  _startDate = picked;
+                } else {
+                  _endDate = picked;
+                }
+              });
+              _fetchData();
+            }
+          },
+          child: Container(
+            width: 150,
+            height: 40, // Reduced height from 48 to 40
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, size: 14, color: const Color(0xFF7F8C8D)), // Smaller icon
+                const SizedBox(width: 8),
+                Text(
+                  DateFormat('dd MMM yyyy').format(date),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF2C3E50)), // Smaller font
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdownFilter(String label, List<String> items, String selected, Map<String, String> displayMap) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF7F8C8D)),
+        ),
+        const SizedBox(height: 4), // Reduced spacing
+        Container(
+          width: 180,
+          height: 40, // Reduced height from 48 to 40
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selected,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF7F8C8D), size: 20),
+              items: items.map((db) => DropdownMenuItem(
+                value: db,
+                child: Text(
+                  displayMap[db]!,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF2C3E50)),
+                ),
+              )).toList(),
+              onChanged: (value) {
+                setState(() => selectedDbKey = value);
+                _fetchData();
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        MouseRegion(
+          onEnter: (_) => setState(() => _isHoveringColumns = true),
+          onExit: (_) => setState(() => _isHoveringColumns = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            transform: _isHoveringColumns ? (Matrix4.identity()..scale(1.02)) : Matrix4.identity(),
+            child: ColumnsDropdownButton(
+              allColumns: _allColumns,
+              visibleColumns: _visibleColumns,
+              onToggleColumn: _toggleColumn,
+              color: const Color(0xFF4154F1),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        MouseRegion(
+          onEnter: (_) => setState(() => _isHoveringExport = true),
+          onExit: (_) => setState(() => _isHoveringExport = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            transform: _isHoveringExport ? (Matrix4.identity()..scale(1.02)) : Matrix4.identity(),
+            child: ElevatedButton.icon(
+              onPressed: _exportExcel,
+              icon: const Icon(Icons.file_download, size: 16),
+              label: const Text("Excel", style: TextStyle(fontSize: 13)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF27AE60),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), // Reduced vertical padding
+                minimumSize: const Size(100, 40), // Reduced height
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton(
+          onPressed: _fetchData,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF4154F1),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10), // Reduced vertical padding
+            minimumSize: const Size(100, 40), // Reduced height
+          ),
+          child: const Text(
+            "Search",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTable(double screenWidth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          ),
+          child: const Text(
+            "Item Details",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+          ),
+        ),
+        Expanded(
+          child: Scrollbar(
+            controller: _horizontalScroll,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _horizontalScroll,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: _visibleColumns.length * 200.0,
+                child: Column(
+                  children: [
+                    _buildHeaderRow(56),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _verticalScroll,
+                        itemCount: _allRows.length,
+                        itemBuilder: (context, i) {
+                          final row = _allRows[i];
+                          return Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey.shade100),
+                              ),
+                            ),
+                            child: Row(
+                              children: _visibleColumns.map((col) => Container(
+                                width: 200,
+                                height: 48,
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: i % 2 == 0 ? Colors.white : const Color(0xFFF9FAFC),
+                                  border: Border(
+                                    right: BorderSide(color: Colors.grey.shade200),
+                                  ),
+                                ),
+                                child: Text(
+                                  row.getField(col.key).toString(),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: const Color(0xFF2C3E50),
+                                    fontWeight: col.key == 'totalSaleAmount' ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 2,
+                                ),
+                              )).toList(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    _buildTotalRow(48),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildHeaderRow(double height) {
     return Container(
-      decoration: BoxDecoration(color: const Color(0xFFF3F3F3), border: Border.symmetric(horizontal: BorderSide(color: Colors.grey[400]!))),
-      child: Row(children: _visibleColumns.map((col) => Container(width: 180, height: height, alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[400]!))), child: Text(col.title, style: const TextStyle(fontWeight: FontWeight.bold)))).toList()),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FA),
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300),
+          top: BorderSide(color: Colors.grey.shade300),
+        ),
+      ),
+      child: Row(
+        children: _visibleColumns.map((col) => Container(
+          width: 200,
+          height: height,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              right: BorderSide(color: Colors.grey.shade300),
+            ),
+          ),
+          child: Text(
+            col.title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: Color(0xFF2C3E50),
+            ),
+          ),
+        )).toList(),
+      ),
     );
   }
 
   Widget _buildTotalRow(double height) {
     return Container(
-      decoration: BoxDecoration(color: const Color(0xFFFFFDD0), border: Border(top: BorderSide(color: Colors.grey[400]!, width: 2))),
-      child: Row(children: _visibleColumns.map((col) => Container(width: 180, height: height, alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[400]!))), child: Text(totalRow.getField(col.key).toString(), style: const TextStyle(fontWeight: FontWeight.bold)))).toList()),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F2FF),
+        border: Border(
+          top: BorderSide(color: const Color(0xFF4154F1).withOpacity(0.3), width: 2),
+        ),
+      ),
+      child: Row(
+        children: _visibleColumns.map((col) => Container(
+          width: 200,
+          height: height,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              right: BorderSide(color: Colors.grey.shade300),
+            ),
+          ),
+          child: Text(
+            totalRow.getField(col.key).toString(),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: Color(0xFF4154F1),
+            ),
+          ),
+        )).toList(),
+      ),
     );
-  }
-
-  Widget _dateFilter(String label, DateTime date, ValueChanged<DateTime> onPicked) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label),
-      SizedBox(width: 160, child: TextField(readOnly: true, decoration: InputDecoration(hintText: DateFormat('yyyy-MM-dd').format(date), prefixIcon: const Icon(Icons.calendar_today), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), onTap: () async {
-        final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2100));
-        if (picked != null) onPicked(picked);
-      }))
-    ]);
-  }
-
-  Widget _dropdownFilter(String label, List<String> items, String selected, ValueChanged<String?> onChanged, Map<String, String> displayMap) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label),
-      SizedBox(width: 180, child: DropdownButtonFormField<String>(value: selected, items: items.map((e) => DropdownMenuItem(value: e, child: Text(displayMap[e] ?? e))).toList(), onChanged: onChanged, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))))
-    ]);
   }
 }
 
 class _Col {
   final String title, key;
   const _Col(this.title, this.key);
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is _Col && other.key == key;
+  }
+
+  @override
+  int get hashCode => key.hashCode;
 }
 
 class _ItemSalesRow {
   final String restaurant, productName, productCode;
   final double totalQntSold, totalSaleAmount;
 
-  _ItemSalesRow({required this.restaurant, required this.productName, required this.productCode, this.totalQntSold = 0.0, this.totalSaleAmount = 0.0});
+  _ItemSalesRow({
+    required this.restaurant,
+    required this.productName,
+    required this.productCode,
+    this.totalQntSold = 0.0,
+    this.totalSaleAmount = 0.0
+  });
 
   dynamic getField(String key) {
     switch (key) {
       case 'restaurant': return restaurant;
       case 'productName': return productName;
       case 'productCode': return productCode;
-    // Updated to 3 decimal places
-      case 'totalQntSold': return totalQntSold.toStringAsFixed(3);
+      case 'totalQntSold': return totalQntSold.toStringAsFixed(1);
       case 'totalSaleAmount': return totalSaleAmount.toStringAsFixed(3);
       default: return '';
     }
   }
 
-  _ItemSalesRow copyWith({String? restaurant, String? productName, String? productCode, double? totalQntSold, double? totalSaleAmount}) {
+  _ItemSalesRow copyWith({
+    String? restaurant,
+    String? productName,
+    String? productCode,
+    double? totalQntSold,
+    double? totalSaleAmount
+  }) {
     return _ItemSalesRow(
       restaurant: restaurant ?? this.restaurant,
       productName: productName ?? this.productName,
@@ -418,7 +861,15 @@ class ColumnsDropdownButton extends StatefulWidget {
   final List<_Col> allColumns, visibleColumns;
   final void Function(_Col col, bool value) onToggleColumn;
   final Color color;
-  const ColumnsDropdownButton({super.key, required this.allColumns, required this.visibleColumns, required this.onToggleColumn, this.color = const Color(0xFFD5282B)});
+
+  const ColumnsDropdownButton({
+    super.key,
+    required this.allColumns,
+    required this.visibleColumns,
+    required this.onToggleColumn,
+    this.color = const Color(0xFF4154F1)
+  });
+
   @override
   State<ColumnsDropdownButton> createState() => _ColumnsDropdownButtonState();
 }
@@ -426,26 +877,149 @@ class ColumnsDropdownButton extends StatefulWidget {
 class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _dropdownOverlay;
+
   void _showDropdown() {
     if (_dropdownOverlay != null) return;
-    _dropdownOverlay = OverlayEntry(builder: (context) => Stack(children: [
-      Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: _removeDropdown)),
-      Positioned(width: 280, child: CompositedTransformFollower(link: _layerLink, offset: const Offset(0, 44), child: Material(child: Container(
-        decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.grey[300]!), borderRadius: BorderRadius.circular(8), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)]),
-        child: StatefulBuilder(builder: (context, setMenuState) => Column(mainAxisSize: MainAxisSize.min, children: [
-          ConstrainedBox(constraints: const BoxConstraints(maxHeight: 350), child: ListView(shrinkWrap: true, children: widget.allColumns.map((col) {
-            final checked = widget.visibleColumns.contains(col);
-            return CheckboxListTile(value: checked, title: Text(col.title), activeColor: widget.color, onChanged: (v) { widget.onToggleColumn(col, v!); setMenuState(() {}); });
-          }).toList())),
-          ElevatedButton(onPressed: _removeDropdown, style: ElevatedButton.styleFrom(backgroundColor: widget.color), child: const Text("Done", style: TextStyle(color: Colors.white)))
-        ])),
-      ))))
-    ]));
-    Overlay.of(context, rootOverlay: true)!.insert(_dropdownOverlay!);
+
+    _dropdownOverlay = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _removeDropdown,
+            ),
+          ),
+          Positioned(
+            width: 280,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              offset: const Offset(0, 45),
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 16,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: StatefulBuilder(
+                    builder: (context, setMenuState) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: Colors.grey.shade200),
+                            ),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.view_column, size: 18, color: Color(0xFF4154F1)),
+                              SizedBox(width: 8),
+                              Text(
+                                "Select Columns",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Color(0xFF2C3E50),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 350),
+                          child: ListView(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            children: widget.allColumns.map((col) {
+                              final checked = widget.visibleColumns.contains(col);
+                              return CheckboxListTile(
+                                value: checked,
+                                title: Text(
+                                  col.title,
+                                  style: const TextStyle(fontSize: 13, color: Color(0xFF2C3E50)),
+                                ),
+                                activeColor: widget.color,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                                dense: true,
+                                onChanged: (v) {
+                                  widget.onToggleColumn(col, v!);
+                                  setMenuState(() {});
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: Colors.grey.shade200),
+                            ),
+                          ),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _removeDropdown,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: widget.color,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              child: const Text(
+                                "Done",
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Overlay.of(context).insert(_dropdownOverlay!);
   }
-  void _removeDropdown() { _dropdownOverlay?.remove(); _dropdownOverlay = null; }
+
+  void _removeDropdown() {
+    _dropdownOverlay?.remove();
+    _dropdownOverlay = null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return CompositedTransformTarget(link: _layerLink, child: ElevatedButton.icon(onPressed: _showDropdown, icon: const Icon(Icons.view_column), label: const Text("Columns"), style: ElevatedButton.styleFrom(backgroundColor: widget.color, foregroundColor: Colors.white)));
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: OutlinedButton.icon(
+        onPressed: _showDropdown,
+        icon: const Icon(Icons.view_column, size: 16),
+        label: const Text("Columns", style: TextStyle(fontSize: 13)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: widget.color,
+          side: BorderSide(color: widget.color.withOpacity(0.5)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), // Reduced vertical padding
+          minimumSize: const Size(100, 40), // Reduced height
+        ),
+      ),
+    );
   }
 }

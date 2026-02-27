@@ -6,6 +6,8 @@ import 'package:merchant/ReportPage.dart';
 import 'package:merchant/RunningOrderPage.dart';
 import 'package:merchant/main.dart';
 import 'package:merchant/Dashboard.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 
 class SidePanel extends StatefulWidget {
   final Widget child;
@@ -47,7 +49,7 @@ class _SidePanelState extends State<SidePanel> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 600;
-    final bool isWindows = Platform.isWindows;
+    final bool isWindows = !kIsWeb && Platform.isWindows;
 
     return Scaffold(
       body: Stack(
@@ -165,7 +167,7 @@ class _SidePanelState extends State<SidePanel> {
               // FIX: Reduced top value to align perfectly with the AppBar title center
               // Windows: 15px (standard window title bar height)
               // Mobile: 15px (standard status bar offset + centering)
-              top: isWindows && !isMobile ? 15 : 15,
+              top: (!kIsWeb && isWindows && !isMobile) ? 15 : 15,
               left: 16,
               child: SafeArea(
                 child: FloatingActionButton.small(

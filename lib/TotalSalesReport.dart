@@ -1,3 +1,4 @@
+//no change
 class TotalSalesReport {
   final String occupiedTables;
   final String onlineSales;
