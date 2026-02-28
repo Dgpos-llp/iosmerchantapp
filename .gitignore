@@ -1,48 +1,5 @@
-# Misc
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.buildlog/
-.history
-.svn/
-
-# IntelliJ / Android Studio
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# VS Code
-.vscode/
-
-# Flutter / Dart
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-build/
-**/doc/api/
-**/ios/Flutter/.last_build_id
-
-# Android
-android/.gradle/
-android/local.properties
-android/app/debug
-android/app/profile
-android/app/release
-
-# iOS
-ios/Pods/
-ios/.symlinks/
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
-
-# Symbolication
-app.*.symbols
-
-# Obfuscation
-app.*.map.json
+iosmerchantapp/build/
+iosmerchantapp/.dart_tool/
+iosmerchantapp/ios/Pods/
+iosmerchantapp/.DS_Store
+iosmerchantapp/ios/.DS_Store
