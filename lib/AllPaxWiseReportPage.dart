@@ -6,7 +6,7 @@ import 'package:merchant/main.dart';
 import 'SidePanel.dart';
 import 'package:merchant/TotalSalesReport.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
+import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
 // ---- ColumnsDropdownButton component for UI column selection ----
 class ColumnsDropdownButton extends StatefulWidget {
@@ -330,13 +330,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
     final fileBytes = excelFile.encode();
 
     if (kIsWeb) {
-      // WEB PLATFORM
-      final blob = html.Blob([fileBytes!]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'PaxWise.xlsx')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      web_exporter.saveFileWeb(fileBytes!, 'AllPaxWiseReport.xlsx');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

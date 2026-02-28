@@ -6,7 +6,7 @@ import 'SidePanel.dart';
 import 'main.dart';
 import 'TotalSalesReport.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
+import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
 // ---- ColumnsDropdownButton copied here for reuse ----
 class ColumnsDropdownButton extends StatefulWidget {
@@ -354,13 +354,7 @@ class _AllRestaurantSalesReportPageState extends State<AllRestaurantSalesReportP
     final fileBytes = excelFile.encode();
 
     if (kIsWeb) {
-      // WEB PLATFORM
-      final blob = html.Blob([fileBytes!]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'AllRestaurantSalesReport.xlsx')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      web_exporter.saveFileWeb(fileBytes!, 'AllRestaurantSalesReport.xlsx');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

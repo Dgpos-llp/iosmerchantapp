@@ -6,7 +6,7 @@ import 'package:merchant/TotalSalesReport.dart';
 import 'package:merchant/main.dart';
 import 'SidePanel.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;  // ADD THIS
-import 'dart:html' as html;
+import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
 class AllBillwiseSalesReportPage extends StatefulWidget {
   final Map<String, String> dbToBrandMap;
@@ -431,13 +431,7 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
     final fileBytes = excelFile.encode();
 
     if (kIsWeb) {
-      // WEB PLATFORM
-      final blob = html.Blob([fileBytes!]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'BillwiseWise.xlsx')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      web_exporter.saveFileWeb(fileBytes!, 'AllBillwiseSalesReport.xlsx');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,4 +1,4 @@
 {
-     "apiUrl": "http://192.168.1.7:8089/dgpos/",
+     "apiUrl": "http://103.205.142.101:8089/dgpos/",
     "clientCode": "credentials"
 }

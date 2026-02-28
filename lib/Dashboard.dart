@@ -10,7 +10,7 @@ import 'main.dart';
 import 'package:merchant/TotalSalesReport.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
+import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
 class Dashboard extends ConsumerStatefulWidget {
   final Map<String, String> dbToBrandMap;
@@ -1918,13 +1918,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final fileBytes = excelFile.encode();
 
     if (kIsWeb) {
-      // WEB PLATFORM
-      final blob = html.Blob([fileBytes!]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'DashboardExport_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      web_exporter.saveFileWeb(fileBytes!, 'DashBoard.xlsx');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

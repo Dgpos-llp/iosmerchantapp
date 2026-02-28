@@ -6,7 +6,7 @@ import 'package:merchant/TotalSalesReport.dart';
 import 'package:merchant/main.dart';
 import 'SidePanel.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
+import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
 // ---- ColumnsDropdownButton component for UI column selection ----
 class ColumnsDropdownButton extends StatefulWidget {
@@ -339,13 +339,7 @@ class _AllKOTwiseReportPageState extends State<AllKOTwiseReportPage> {
     final fileBytes = excelFile.encode();
 
     if (kIsWeb) {
-      // WEB PLATFORM
-      final blob = html.Blob([fileBytes!]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'KOTAnalysisReport.xlsx')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      web_exporter.saveFileWeb(fileBytes!, 'AllKOTwiseReport.xlsx');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -353,7 +347,7 @@ class _AllKOTwiseReportPageState extends State<AllKOTwiseReportPage> {
       }
     } else {
       // DESKTOP (Windows, Mac, Linux) AND ANDROID
-      final String path = '${Directory.current.path}/KOTAnalysisReport.xlsx';
+      final String path = '${Directory.current.path}/AllKOTwiseReport.xlsx';
       final file = File(path);
       await file.writeAsBytes(fileBytes!);
 

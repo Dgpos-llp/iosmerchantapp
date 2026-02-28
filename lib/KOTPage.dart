@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'main.dart' as app;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
+import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
 class KOTPage extends StatefulWidget {
   final Map<String, String> dbToBrandMap;
@@ -141,13 +141,7 @@ class _KOTPageState extends State<KOTPage> {
     final fileBytes = excelFile.encode();
 
     if (kIsWeb) {
-      // WEB PLATFORM
-      final blob = html.Blob([fileBytes!]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'KOTSummaryReport.xlsx')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      web_exporter.saveFileWeb(fileBytes!, 'KOTReport.xlsx');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
