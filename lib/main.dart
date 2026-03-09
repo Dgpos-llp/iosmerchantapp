@@ -714,6 +714,7 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FC),
@@ -722,55 +723,52 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
           constraints: const BoxConstraints(maxWidth: 1200),
           padding: const EdgeInsets.all(24),
           child: Row(
+            // This aligns the center-line of the branding to the center-line of the login box
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Left side - Branding
               Expanded(
                 flex: 1,
                 child: Container(
-                  padding: const EdgeInsets.all(40),
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    // Constrains the column to only take the height its children need
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Updated: Larger logo without background
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          // Removed background color
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Image.asset(
-                          'assets/images/dposnewlogopn.png',
-                          width: 120, // Increased from 80 to 120
-                          height: 120, // Increased from 80 to 120
-                        ),
+                      Image.asset(
+                        'assets/images/dposnewlogopn.png',
+                        width: 250,
+                        height: 120,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.centerLeft,
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 30),
                       Text(
                         'Welcome Back!!!',
                         style: TextStyle(
-                          fontSize: 42,
+                          fontSize: 48,
                           fontWeight: FontWeight.bold,
                           color: const Color(0xFF2C3E50),
-                          height: 1.2,
+                          height: 1.1,
                         ),
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'Manage your restaurants, track sales, and monitor operations all in one place.',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           color: const Color(0xFF7F8C8D),
                           height: 1.5,
                         ),
                       ),
                       const SizedBox(height: 40),
-                      Row(
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
                         children: [
                           _buildFeatureChip(Icons.restaurant, 'Multi-outlet'),
-                          const SizedBox(width: 12),
                           _buildFeatureChip(Icons.analytics, 'Real-time analytics'),
-                          const SizedBox(width: 12),
                           _buildFeatureChip(Icons.receipt, 'Smart reporting'),
                         ],
                       ),
@@ -782,9 +780,9 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
               // Right side - Login Form
               Expanded(
                 flex: 1,
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 400),
-                  child: Center(
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 450),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
@@ -827,7 +825,6 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               ),
                             ),
                             const SizedBox(height: 32),
-                            // Username field with Enter key navigation
                             Text(
                               "Username",
                               style: TextStyle(
@@ -843,14 +840,14 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               enabled: !_isLoading,
                               decoration: InputDecoration(
                                 hintText: "Enter your username",
-                                prefixIcon: Icon(Icons.person_outline, color: const Color(0xFF7F8C8D), size: 20),
+                                prefixIcon: Icon(Icons.person_outline,
+                                    color: const Color(0xFF7F8C8D), size: 20),
                               ),
-                              onSubmitted: (_) => _fieldFocusChange(
-                                  context, _usernameFocusNode, _passwordFocusNode),
+                              onSubmitted: (_) => _fieldFocusChange(context,
+                                  _usernameFocusNode, _passwordFocusNode),
                               textInputAction: TextInputAction.next,
                             ),
                             const SizedBox(height: 20),
-                            // Password field with Enter key login
                             Text(
                               "Password",
                               style: TextStyle(
@@ -867,14 +864,18 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               enabled: !_isLoading,
                               decoration: InputDecoration(
                                 hintText: "Enter your password",
-                                prefixIcon: Icon(Icons.lock_outline, color: const Color(0xFF7F8C8D), size: 20),
+                                prefixIcon: Icon(Icons.lock_outline,
+                                    color: const Color(0xFF7F8C8D), size: 20),
                                 suffixIcon: IconButton(
                                   icon: Icon(
-                                    _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                                    _isPasswordVisible
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
                                     color: const Color(0xFF7F8C8D),
                                     size: 20,
                                   ),
-                                  onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                                  onPressed: () => setState(() =>
+                                  _isPasswordVisible = !_isPasswordVisible),
                                 ),
                               ),
                               onSubmitted: (_) {
@@ -886,17 +887,19 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               textInputAction: TextInputAction.done,
                             ),
                             const SizedBox(height: 24),
-                            // Error message
                             if (errorMessage != null) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE74C3C).withOpacity(0.1),
+                                  color:
+                                  const Color(0xFFE74C3C).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.error_outline, color: const Color(0xFFE74C3C), size: 18),
+                                    Icon(Icons.error_outline,
+                                        color: const Color(0xFFE74C3C),
+                                        size: 18),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
@@ -912,12 +915,13 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               ),
                               const SizedBox(height: 20),
                             ],
-                            // Login button
                             SizedBox(
                               width: double.infinity,
                               height: 54,
                               child: ElevatedButton(
-                                onPressed: _isLoading ? null : () => login(context, ref),
+                                onPressed: _isLoading
+                                    ? null
+                                    : () => login(context, ref),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF4154F1),
                                   foregroundColor: Colors.white,
@@ -932,11 +936,14 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                                   width: 24,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor:
+                                    AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
                                   ),
                                 )
                                     : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.center,
                                   children: [
                                     Icon(Icons.login, size: 20),
                                     SizedBox(width: 10),
