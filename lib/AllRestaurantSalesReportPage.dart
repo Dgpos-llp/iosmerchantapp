@@ -495,13 +495,16 @@ class _AllRestaurantSalesReportPageState extends State<AllRestaurantSalesReportP
     return Container(
       decoration: BoxDecoration(color: const Color(0xFFF5F7FA), border: Border(bottom: BorderSide(color: Colors.grey.shade300), top: BorderSide(color: Colors.grey.shade300))),
       child: Row(
-        children: _visibleColumns.map((col) => Container(
-          width: 180, height: 56,
-          alignment: Alignment.centerLeft, // Headers are left aligned as requested
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
-          child: Text(col.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50))),
-        )).toList(),
+        children: _visibleColumns.map((col) {
+          // Headers now align right if numeric, to match the rows and total row
+          return Container(
+            width: 180, height: 56,
+            alignment: _isNumericCol(col.key) ? Alignment.centerRight : Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
+            child: Text(col.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50))),
+          );
+        }).toList(),
       ),
     );
   }

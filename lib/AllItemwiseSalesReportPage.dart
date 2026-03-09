@@ -399,7 +399,9 @@ class _AllItemwiseSalesReportPageState extends State<AllItemwiseSalesReportPage>
     return Container(
       decoration: BoxDecoration(color: const Color(0xFFF5F7FA), border: Border(bottom: BorderSide(color: Colors.grey.shade300), top: BorderSide(color: Colors.grey.shade300))),
       child: Row(children: _visibleColumns.map((col) => Container(
-          width: w, height: h, alignment: Alignment.centerLeft,
+          width: w, height: h,
+          // Updated alignment: align header to the right if the column is numeric
+          alignment: _isNumericCol(col.key) ? Alignment.centerRight : Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
           child: Text(col.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50)))
