@@ -173,10 +173,10 @@ class _ReportPageState extends State<ReportPage> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: isMobile ? 2 : 5,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 150 / 120,
+        crossAxisCount: isMobile ? 2 : 7,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.0,
       ),
       itemCount: reports.length,
       itemBuilder: (context, index) => ReportTile(
@@ -351,12 +351,11 @@ class _ReportTileState extends State<ReportTile> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
-          width: 150,
-          height: 120,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             boxShadow: [
               _isHovered
                   ? BoxShadow(color: widget.primaryColor.withOpacity(0.2), blurRadius: 12, spreadRadius: 2, offset: const Offset(0, 4))
@@ -378,7 +377,7 @@ class _ReportTileState extends State<ReportTile> {
                   child: Icon(
                     widget.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
                     color: widget.isFavorite ? Colors.orange : const Color(0xFFBDBDBD),
-                    size: 24, // Increased star size slightly
+                    size: 18, // Increased star size slightly
                   ),
                 ),
               ),
@@ -389,15 +388,15 @@ class _ReportTileState extends State<ReportTile> {
                     const SizedBox(height: 8),
                     Icon(
                         Icons.analytics_outlined,
-                        size: 36, // Increased Icon size
+                        size: 32, // Increased Icon size
                         color: widget.primaryColor
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     Text(
                       widget.report.name,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 14, // Increased font size
+                        fontSize: 13, // Increased font size
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF333333),
                         height: 1.1, // Tighter line height to save space

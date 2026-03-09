@@ -722,14 +722,18 @@ class _DashboardState extends ConsumerState<Dashboard> {
           elevation: 0,
           toolbarHeight: 70,
           automaticallyImplyLeading: false,
-          // FIX 1: Forces the title to absolute center, ignoring leading/action widths
-          centerTitle: true,
-          title: const Text(
-            "Dashboard",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF2C3E50),
+          centerTitle: false, // Change to false
+          title: Padding(
+            padding: EdgeInsets.only(
+              left: isHeaderMobile ? 50 : 0, // Add left padding on mobile to clear the hamburger
+            ),
+            child: const Text(
+              "Dashboard",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2C3E50),
+              ),
             ),
           ),
           // FIX 2: Increased leadingWidth to accommodate both the sidebar toggle and selector
