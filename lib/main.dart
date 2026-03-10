@@ -1085,6 +1085,7 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FC),
@@ -1092,26 +1093,20 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                const SizedBox(height: 40),
-                // Updated: Larger logo without background
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    // Removed background color and shadow
-                    // color: Colors.white,
-                    // shape: BoxShape.circle,
-                    // boxShadow: [...],
-                  ),
+                const SizedBox(height: 50), // Added more top spacing
+                // Increased Logo Size
+                Center(
                   child: Image.asset(
                     'assets/images/dposnewlogopn.png',
-                    width: 120, // Increased from 80 to 120
-                    height: 120, // Increased from 80 to 120
+                    width: 200, // Increased from 120
+                    height: 200, // Increased from 120
+                    fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 30),
+                /*const SizedBox(height: 20),*/
                 // Title
                 const Text(
                   "Welcome Back!!!",
@@ -1146,7 +1141,6 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
                   ),
                   child: Column(
                     children: [
-                      // Username field with Enter key navigation
                       TextField(
                         controller: usernameController,
                         focusNode: _usernameFocusNode,
@@ -1160,7 +1154,6 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
                         textInputAction: TextInputAction.next,
                       ),
                       const SizedBox(height: 16),
-                      // Password field with Enter key login
                       TextField(
                         controller: passwordController,
                         focusNode: _passwordFocusNode,
@@ -1187,7 +1180,6 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
                         textInputAction: TextInputAction.done,
                       ),
                       const SizedBox(height: 24),
-                      // Error message
                       if (errorMessage != null) ...[
                         Container(
                           padding: const EdgeInsets.all(12),
@@ -1213,7 +1205,6 @@ class _LoginPageMobileState extends ConsumerState<LoginPageMobile> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      // Login button
                       SizedBox(
                         width: double.infinity,
                         height: 54,
