@@ -20,6 +20,15 @@ import 'package:merchant/AllTimeAuditReportPage.dart';
 import 'package:merchant/AllCancellationReportPage.dart';
 import 'package:merchant/AllItemConsumReportPage.dart';
 import 'package:merchant/AllComplimentReportPage.dart';
+import 'package:merchant/AllDayWiseReportPage.dart';
+import 'package:merchant/AllDayEndReportPage.dart';
+import 'package:merchant/AllModifiedBillReportPage.dart';
+import 'package:merchant/AllComplimentItemReportPage.dart';
+import 'package:merchant/AllAdvanceItemwiseReportPage.dart';
+import 'package:merchant/AllAdvanceBillwiseReportPage.dart';
+import 'package:merchant/AllCreditReportPage.dart';
+import 'package:merchant/AllAuditSummaryReportPage.dart';
+import 'package:merchant/AllAuditItemReportPage.dart';
 import 'SidePanel.dart';
 
 class ReportPage extends StatefulWidget {
@@ -44,7 +53,7 @@ class _ReportPageState extends State<ReportPage> {
     ReportItem(id: 4, name: "Pax Wise", group: "All Restaurant Report", description: "Guest sales summarized by biller"),
     ReportItem(id: 5, name: "Tax Wise", group: "All Restaurant Report", description: "GST overview of sales and returns"),
     ReportItem(id: 6, name: "OnlineOrder Cancellation ", group: "All Restaurant Report", description: "Online cancellations with reasons per outlet"),
-    ReportItem(id: 7, name: "KOT Pending ", group: "All Restaurant Report", description: "List of pending KOTs across outlets"),
+    ReportItem(id: 7, name: "KOT Analysis ", group: "All Restaurant Report", description: "List of pending KOTs across outlets"),
     ReportItem(id: 8, name: "Discount Wise", group: "All Restaurant Report", description: "Discounts applied by outlet and bill"),
     ReportItem(id: 9, name: "Settlement Wise ", group: "All Restaurant Report", description: "Sales breakdown by payment method"),
     ReportItem(id: 10, name: "Online Order ", group: "All Restaurant Report", description: "Summary of online order sales"),
@@ -54,6 +63,15 @@ class _ReportPageState extends State<ReportPage> {
     ReportItem(id: 14, name: "ItemConsumption ", group: "All Restaurant Report", description: "All ItemConsumption Report"),
     ReportItem(id: 15, name: "Move Kot ", group: "All Restaurant Report", description: "All Moved KOT with summary"),
     ReportItem(id: 16, name: "Compliment ", group: "All Restaurant Report", description: "All Complement bills "),
+    ReportItem(id: 17, name: "Day Wise ", group: "All Restaurant Report", description: "All Daywise report "),
+    ReportItem(id: 18, name: "Day End ", group: "All Restaurant Report", description: "Day end report "),
+    ReportItem(id: 19, name: "Modified Bill", group: "All Restaurant Report", description: "Modified bill report"),
+    ReportItem(id: 20, name: "Compliment Item", group: "All Restaurant Report", description: "Complimentary Item"),
+    ReportItem(id: 21, name: "Advance Item wise", group: "All Restaurant Report", description: "Advance Item wise"),
+    ReportItem(id: 22, name: "Advance Bill wise", group: "All Restaurant Report", description: "Advance Bill wise"),
+    ReportItem(id: 23, name: "Credit Report", group: "All Restaurant Report", description: "Credit Report"),
+    ReportItem(id: 24, name: "Audit Summary Report", group: "All Restaurant Report", description: "Audit Summary Report"),
+    ReportItem(id: 25, name: "Audit Item Report", group: "All Restaurant Report", description: "Audit Item Report"),
   ];
 
   @override
@@ -313,6 +331,15 @@ class _ReportPageState extends State<ReportPage> {
       case 14: page = AllItemConsumReportPage(dbToBrandMap: widget.dbToBrandMap); break;
       case 15: page = AllMoveKotReportPage(dbToBrandMap: widget.dbToBrandMap); break;
       case 16: page = AllComplimentReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 17: page = AllDayWiseReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 18: page = AllDayEndReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 19: page = AllModifiedBillReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 20: page = AllComplimentItemReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 21: page = AllAdvanceItemwiseReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 22: page = AllAdvanceBillwiseReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 23: page = AllCreditReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 24: page = AllAuditSummaryReportPage(dbToBrandMap: widget.dbToBrandMap); break;
+      case 25: page = AllAuditItemReportPage(dbToBrandMap: widget.dbToBrandMap); break;
     }
     if (page != null) Navigator.push(context, MaterialPageRoute(builder: (_) => page!));
   }

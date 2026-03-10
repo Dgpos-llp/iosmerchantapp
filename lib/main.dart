@@ -444,6 +444,229 @@ class UserData {
     return [];
   }
 
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, List<DayWiseReport>>> fetchDayWiseForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<DayWiseReport>> dbToDayWiseMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/daywise?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 DayWise API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToDayWiseMap[db] = decoded.map<DayWiseReport>((e) => DayWiseReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ DayWise API Error for $db: $e");
+      }
+    }
+    return dbToDayWiseMap;
+  }
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, DayEndReport>> fetchDayEndForDbs(
+      Config config, List<String> dbNames, String posDate, {String? previousDate}) async {
+    final Map<String, DayEndReport> dbToDayEndMap = {};
+
+    for (final db in dbNames) {
+      String url = "${config.apiUrl}report/dayend?DB=$db&posdate=$posDate";
+      if (previousDate != null && previousDate.isNotEmpty) {
+        url += "&previousdate=$previousDate";
+      }
+
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 DayEnd API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          Map<String, dynamic> responseData = {};
+
+          // Handle both List and Map responses safely
+          if (decoded is List) {
+            if (decoded.isNotEmpty && decoded.first != null) {
+              responseData = Map<String, dynamic>.from(decoded.first);
+            }
+          } else if (decoded is Map) {
+            responseData = Map<String, dynamic>.from(decoded);
+          }
+
+          dbToDayEndMap[db] = DayEndReport.fromJson(responseData);
+        }
+      } catch (e) {
+        print("❌ DayEnd API Error for $db: $e");
+      }
+    }
+    return dbToDayEndMap;
+  }
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, List<ModifiedBillReport>>> fetchModifiedBillForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<ModifiedBillReport>> dbToModifiedBillMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/modifiedbill?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 ModifiedBill API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToModifiedBillMap[db] = decoded.map<ModifiedBillReport>((e) => ModifiedBillReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ ModifiedBill API Error for $db: $e");
+      }
+    }
+    return dbToModifiedBillMap;
+  }
+
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, List<ComplimentItemReport>>> fetchComplimentItemForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<ComplimentItemReport>> dbToComplimentItemMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/complimentitem?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 ComplimentItem API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToComplimentItemMap[db] = decoded.map<ComplimentItemReport>((e) => ComplimentItemReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ ComplimentItem API Error for $db: $e");
+      }
+    }
+    return dbToComplimentItemMap;
+  }
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, List<AdvanceItemwiseReport>>> fetchAdvanceItemwiseForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<AdvanceItemwiseReport>> dbToAdvanceItemwiseMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/advance-itemwise?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 AdvanceItemwise API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToAdvanceItemwiseMap[db] = decoded.map<AdvanceItemwiseReport>((e) => AdvanceItemwiseReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ AdvanceItemwise API Error for $db: $e");
+      }
+    }
+    return dbToAdvanceItemwiseMap;
+  }
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, List<AdvanceBillwiseReport>>> fetchAdvanceBillwiseForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<AdvanceBillwiseReport>> dbToAdvanceBillwiseMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/advance-billwise?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 AdvanceBillwise API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToAdvanceBillwiseMap[db] = decoded.map<AdvanceBillwiseReport>((e) => AdvanceBillwiseReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ AdvanceBillwise API Error for $db: $e");
+      }
+    }
+    return dbToAdvanceBillwiseMap;
+  }
+
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, List<CreditReport>>> fetchCreditReportForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<CreditReport>> dbToCreditReportMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/credit-report?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 CreditReport API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToCreditReportMap[db] = decoded.map<CreditReport>((e) => CreditReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ CreditReport API Error for $db: $e");
+      }
+    }
+    return dbToCreditReportMap;
+  }
+// Add this to the UserData class in main.dart
+  static Future<Map<String, List<AuditSummaryReport>>> fetchAuditSummaryForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<AuditSummaryReport>> dbToAuditSummaryMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/auditsum?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 AuditSummary API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToAuditSummaryMap[db] = decoded.map<AuditSummaryReport>((e) => AuditSummaryReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ AuditSummary API Error for $db: $e");
+      }
+    }
+    return dbToAuditSummaryMap;
+  }
+  // Add this to the UserData class in main.dart
+  static Future<Map<String, List<AuditItemReport>>> fetchAuditItemForDbs(
+      Config config, List<String> dbNames, String startDate, String endDate) async {
+    final Map<String, List<AuditItemReport>> dbToAuditItemMap = {};
+
+    for (final db in dbNames) {
+      final url = "${config.apiUrl}report/audititem?startDate=$startDate&endDate=$endDate&DB=$db";
+      try {
+        final response = await http.get(Uri.parse(url), headers: getHeaders());
+        print("📡 AuditItem API [$db] Status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is List) {
+            dbToAuditItemMap[db] = decoded.map<AuditItemReport>((e) => AuditItemReport.fromJson(e)).toList();
+          }
+        }
+      } catch (e) {
+        print("❌ AuditItem API Error for $db: $e");
+      }
+    }
+    return dbToAuditItemMap;
+  }
+
   Map<String, List<KotSummaryReport>> dbToKotSummaryMap = {};
   List<KotSummaryReport> allOrders = [];
   List<KotSummaryReport> activeOrders = [];

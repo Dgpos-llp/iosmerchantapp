@@ -1,4 +1,5 @@
 //no change
+import 'package:intl/intl.dart';
 class TotalSalesReport {
   final String occupiedTables;
   final String onlineSales;
@@ -757,5 +758,685 @@ class ComplimentReport {
       remark: json['remark']?.toString(),
       waiter: json['waiter']?.toString() ?? '',
     );
+  }
+}
+
+// Add this to TotalSalesReport.dart
+class DayWiseReport {
+  final String billDate;
+  final String subtotal;
+  final String billDiscount;
+  final String netTotal;
+  final String billTax;
+  final String billTotal;
+  final String noOfBills;
+
+  DayWiseReport({
+    required this.billDate,
+    required this.subtotal,
+    required this.billDiscount,
+    required this.netTotal,
+    required this.billTax,
+    required this.billTotal,
+    required this.noOfBills,
+  });
+
+  factory DayWiseReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return DayWiseReport(
+      billDate: json['billDate']?.toString() ?? '',
+      subtotal: formatNumber(json['subtotal']),
+      billDiscount: formatNumber(json['billDiscount']),
+      netTotal: formatNumber(json['netTotal']),
+      billTax: formatNumber(json['billTax']),
+      billTotal: formatNumber(json['billTotal']),
+      noOfBills: json['noOfBills']?.toString() ?? '0',
+    );
+  }
+}
+// Add this to TotalSalesReport.dart
+class DayEndReport {
+  final String dineInSaleAmt;
+  final String homeDeliverySaleAmt;
+  final String takeAwaySaleAmt;
+  final String counterSaleAmt;
+  final String onlineSaleAmt;
+  final String advanceOrderSaleAmt;
+  final String noOfBills;
+  final String noOfAdvanceOrders;
+  final String deliveryChargeAmt;
+  final String packagingChargeAmt;
+  final String roundOffAmt;
+  final String tipAmt;
+  final String noOfCancelBills;
+  final String cancelAmt;
+  final String paxCount;
+  final String taxNames;
+  final Map<String, dynamic> settlementAmounts;
+  final Map<String, dynamic> advanceSettlementAmounts;
+  final List<GroupSalesData> groupSalesList;
+
+  DayEndReport({
+    required this.dineInSaleAmt,
+    required this.homeDeliverySaleAmt,
+    required this.takeAwaySaleAmt,
+    required this.counterSaleAmt,
+    required this.onlineSaleAmt,
+    required this.advanceOrderSaleAmt,
+    required this.noOfBills,
+    required this.noOfAdvanceOrders,
+    required this.deliveryChargeAmt,
+    required this.packagingChargeAmt,
+    required this.roundOffAmt,
+    required this.tipAmt,
+    required this.noOfCancelBills,
+    required this.cancelAmt,
+    required this.paxCount,
+    required this.taxNames,
+    required this.settlementAmounts,
+    required this.advanceSettlementAmounts,
+    required this.groupSalesList,
+  });
+
+  factory DayEndReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    List<GroupSalesData> groups = [];
+    if (json['groupSalesList'] != null) {
+      final groupList = json['groupSalesList'] as List;
+      groups = groupList.map((g) => GroupSalesData.fromJson(g)).toList();
+    }
+
+    return DayEndReport(
+      dineInSaleAmt: formatNumber(json['dineinsaleamt']),
+      homeDeliverySaleAmt: formatNumber(json['hdsaleamt']),
+      takeAwaySaleAmt: formatNumber(json['tksalesamt']),
+      counterSaleAmt: formatNumber(json['countersaleamt']),
+      onlineSaleAmt: formatNumber(json['onlinesaleamt']),
+      advanceOrderSaleAmt: formatNumber(json['advanceordersaleamt']),
+      noOfBills: json['nofbils']?.toString() ?? '0',
+      noOfAdvanceOrders: json['nofadvanceorders']?.toString() ?? '0',
+      deliveryChargeAmt: formatNumber(json['deliverychargeamt']),
+      packagingChargeAmt: formatNumber(json['packagingchargeamt']),
+      roundOffAmt: formatNumber(json['roundofamt']),
+      tipAmt: formatNumber(json['tipamt']),
+      noOfCancelBills: json['nofcancelbill']?.toString() ?? '0',
+      cancelAmt: formatNumber(json['cancelamt']),
+      paxCount: json['paxcount']?.toString() ?? '0',
+      taxNames: json['taxNames']?.toString() ?? '',
+      settlementAmounts: json['settlementAmounts'] ?? {},
+      advanceSettlementAmounts: json['advanceSettlementAmounts'] ?? {},
+      groupSalesList: groups,
+    );
+  }
+
+  // Helper method to calculate order type total
+  double get orderTypeTotal {
+    return (double.tryParse(dineInSaleAmt) ?? 0) +
+        (double.tryParse(homeDeliverySaleAmt) ?? 0) +
+        (double.tryParse(takeAwaySaleAmt) ?? 0) +
+        (double.tryParse(counterSaleAmt) ?? 0) +
+        (double.tryParse(onlineSaleAmt) ?? 0) +
+        (double.tryParse(advanceOrderSaleAmt) ?? 0);
+  }
+
+  // Helper method to calculate settlement total
+  double get settlementTotal {
+    double total = 0;
+    settlementAmounts.values.forEach((amount) {
+      total += double.tryParse(amount.toString()) ?? 0;
+    });
+    return total;
+  }
+
+  // Helper method to calculate advance settlement total
+  double get advanceSettlementTotal {
+    double total = 0;
+    advanceSettlementAmounts.values.forEach((amount) {
+      total += double.tryParse(amount.toString()) ?? 0;
+    });
+    return total;
+  }
+
+  // Parse tax names into map
+  Map<String, double> get parsedTaxes {
+    Map<String, double> taxMap = {};
+    if (taxNames.isEmpty) return taxMap;
+
+    List<String> taxEntries = taxNames.split(',');
+    for (String entry in taxEntries) {
+      if (entry.trim().isEmpty) continue;
+      List<String> parts = entry.split(':');
+      if (parts.length >= 2) {
+        String name = parts[0].trim();
+        double amount = double.tryParse(parts[1].trim()) ?? 0.0;
+        taxMap[name] = amount;
+      }
+    }
+    return taxMap;
+  }
+}
+
+class GroupSalesData {
+  final String groupName;
+  final String netTotal;
+  final String grossTotal;
+
+  GroupSalesData({
+    required this.groupName,
+    required this.netTotal,
+    required this.grossTotal,
+  });
+
+  factory GroupSalesData.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return GroupSalesData(
+      groupName: json['groupName']?.toString() ?? '',
+      netTotal: formatNumber(json['netTotal']),
+      grossTotal: formatNumber(json['grossTotal']),
+    );
+  }
+}
+// Add this to TotalSalesReport.dart
+class ModifiedBillReport {
+  final String billNo;
+  final String billDate;
+  final String entryTime;
+  final String modifyTime;
+  final String originalAmount;
+  final String newAmount;
+  final String discount;
+  final String userCreated;
+  final String userEdited;
+  final String remark;
+
+  ModifiedBillReport({
+    required this.billNo,
+    required this.billDate,
+    required this.entryTime,
+    required this.modifyTime,
+    required this.originalAmount,
+    required this.newAmount,
+    required this.discount,
+    required this.userCreated,
+    required this.userEdited,
+    required this.remark,
+  });
+
+  factory ModifiedBillReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return ModifiedBillReport(
+      billNo: json['billNo']?.toString() ?? '',
+      billDate: json['billDate']?.toString() ?? '',
+      entryTime: json['entryTime']?.toString() ?? '',
+      modifyTime: json['modifyTime']?.toString() ?? '',
+      originalAmount: formatNumber(json['originalAmount']),
+      newAmount: formatNumber(json['newAmount']),
+      discount: formatNumber(json['discount']),
+      userCreated: json['userCreated']?.toString() ?? '',
+      userEdited: json['userEdited']?.toString() ?? '',
+      remark: json['remark']?.toString() ?? '',
+    );
+  }
+}
+
+// Add this to TotalSalesReport.dart
+class ComplimentItemReport {
+  final String billNo;
+  final String billDate;
+  final String kotId;
+  final String productName;
+  final String rate;
+  final String quantity;
+  final String amount;
+  final String compRemark;
+  final String waiter;
+
+  ComplimentItemReport({
+    required this.billNo,
+    required this.billDate,
+    required this.kotId,
+    required this.productName,
+    required this.rate,
+    required this.quantity,
+    required this.amount,
+    required this.compRemark,
+    required this.waiter,
+  });
+
+  factory ComplimentItemReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return ComplimentItemReport(
+      billNo: json['billNo']?.toString() ?? '',
+      billDate: json['billDate']?.toString() ?? '',
+      kotId: json['kotId']?.toString() ?? '',
+      productName: json['productName']?.toString() ?? '',
+      rate: formatNumber(json['rate']),
+      quantity: json['quantity']?.toString() ?? '0',
+      amount: formatNumber(json['amount']),
+      compRemark: json['compRemark']?.toString() ?? '',
+      waiter: json['waiter']?.toString() ?? '',
+    );
+  }
+}
+// Add this to TotalSalesReport.dart
+class AdvanceItemwiseReport {
+  final String advanceOrderId;
+  final String customerName;
+  final String customerMobile;
+  final String itemName;
+  final String item;
+  final String quantity;
+  final String weight;
+  final String rate;
+  final String amount;
+  final String modifiers;
+
+  AdvanceItemwiseReport({
+    required this.advanceOrderId,
+    required this.customerName,
+    required this.customerMobile,
+    required this.itemName,
+    required this.item,
+    required this.quantity,
+    required this.weight,
+    required this.rate,
+    required this.amount,
+    required this.modifiers,
+  });
+
+  factory AdvanceItemwiseReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return AdvanceItemwiseReport(
+      advanceOrderId: json['advanceOrderId']?.toString() ?? '',
+      customerName: json['customerName']?.toString() ?? '',
+      customerMobile: json['customerMobile']?.toString() ?? '',
+      itemName: json['itemName']?.toString() ?? '',
+      item: json['item']?.toString() ?? '',
+      quantity: json['quantity']?.toString() ?? '0',
+      weight: json['weight']?.toString() ?? '',
+      rate: formatNumber(json['rate']),
+      amount: formatNumber(json['amount']),
+      modifiers: json['modifiers']?.toString() ?? '',
+    );
+  }
+
+  // Parse modifiers to extract quantities and prices
+  List<Map<String, String>> get parsedModifiers {
+    List<Map<String, String>> result = [];
+    if (modifiers.isEmpty) return result;
+
+    List<String> modifierList = modifiers.split(', ');
+    for (String modifier in modifierList) {
+      // Format: "quantity x product_code @ price"
+      List<String> parts = modifier.split(' x ');
+      if (parts.length >= 2) {
+        String qty = parts[0];
+        String remaining = parts[1];
+        List<String> priceParts = remaining.split(' @ ');
+        if (priceParts.length >= 2) {
+          String productCode = priceParts[0];
+          String price = priceParts[1];
+          result.add({
+            'quantity': qty,
+            'productCode': productCode,
+            'price': price,
+          });
+        }
+      }
+    }
+    return result;
+  }
+
+  // Get modifier quantities as comma-separated string
+  String get modifierQuantities {
+    List<String> qtys = [];
+    for (var mod in parsedModifiers) {
+      qtys.add(mod['quantity'] ?? '');
+    }
+    return qtys.join(', ');
+  }
+
+  // Get modifier prices as comma-separated string
+  String get modifierPrices {
+    List<String> prices = [];
+    for (var mod in parsedModifiers) {
+      prices.add(mod['price'] ?? '');
+    }
+    return prices.join(', ');
+  }
+}
+// Add these classes to TotalSalesReport.dart
+
+class TaxBreakup {
+  final String name;
+  final String percent;
+  final String amount;
+
+  TaxBreakup({
+    required this.name,
+    required this.percent,
+    required this.amount,
+  });
+
+  factory TaxBreakup.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return TaxBreakup(
+      name: json['name']?.toString() ?? '',
+      percent: json['percent']?.toString() ?? '0',
+      amount: formatNumber(json['amount']),
+    );
+  }
+
+  String get columnKey => "${name}_${percent}";
+  String get displayName => percent.isNotEmpty ? "$name $percent%" : name;
+}
+
+class SettlementBreakup {
+  final String name;
+  final String amount;
+
+  SettlementBreakup({
+    required this.name,
+    required this.amount,
+  });
+
+  factory SettlementBreakup.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return SettlementBreakup(
+      name: json['name']?.toString() ?? '',
+      amount: formatNumber(json['amount']),
+    );
+  }
+}
+
+class AdvanceBillwiseReport {
+  final String advanceNo;
+  final String customerName;
+  final String orderDate;
+  final String pickupDateTime;
+  final String subtotal;
+  final String tax;
+  final String grandTotal;
+  final String advancePaid;
+  final String balanceAmount;
+  final String billNo;
+  final List<TaxBreakup> taxBreakup;
+  final List<SettlementBreakup> settlementBreakup;
+
+  AdvanceBillwiseReport({
+    required this.advanceNo,
+    required this.customerName,
+    required this.orderDate,
+    required this.pickupDateTime,
+    required this.subtotal,
+    required this.tax,
+    required this.grandTotal,
+    required this.advancePaid,
+    required this.balanceAmount,
+    required this.billNo,
+    required this.taxBreakup,
+    required this.settlementBreakup,
+  });
+
+  factory AdvanceBillwiseReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    List<TaxBreakup> taxList = [];
+    if (json['taxBreakup'] != null) {
+      taxList = (json['taxBreakup'] as List)
+          .map((e) => TaxBreakup.fromJson(e))
+          .toList();
+    }
+
+    List<SettlementBreakup> settlementList = [];
+    if (json['settlementBreakup'] != null) {
+      settlementList = (json['settlementBreakup'] as List)
+          .map((e) => SettlementBreakup.fromJson(e))
+          .toList();
+    }
+
+    return AdvanceBillwiseReport(
+      advanceNo: json['advanceNo']?.toString() ?? '',
+      customerName: json['customerName']?.toString() ?? '',
+      orderDate: json['orderDate']?.toString() ?? '',
+      pickupDateTime: json['pickupDateTime']?.toString() ?? '',
+      subtotal: formatNumber(json['subtotal']),
+      tax: formatNumber(json['tax']),
+      grandTotal: formatNumber(json['grandTotal']),
+      advancePaid: formatNumber(json['advancePaid']),
+      balanceAmount: formatNumber(json['balanceAmount']),
+      billNo: json['billNo']?.toString() ?? '',
+      taxBreakup: taxList,
+      settlementBreakup: settlementList,
+    );
+  }
+
+  // Get tax amount by column key
+  String getTaxAmount(String columnKey) {
+    for (var tax in taxBreakup) {
+      if (tax.columnKey == columnKey) {
+        return tax.amount;
+      }
+    }
+    return "0.000";
+  }
+
+  // Get settlement amount by name
+  String getSettlementAmount(String name) {
+    for (var settlement in settlementBreakup) {
+      if (settlement.name == name) {
+        return settlement.amount;
+      }
+    }
+    return "0.000";
+  }
+}
+// Add this to TotalSalesReport.dart
+class CreditReport {
+  final String customerName;
+  final String billNo;
+  final String billDate;
+  final String billAmount;
+  final String creditAmount;
+
+  CreditReport({
+    required this.customerName,
+    required this.billNo,
+    required this.billDate,
+    required this.billAmount,
+    required this.creditAmount,
+  });
+
+  factory CreditReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return CreditReport(
+      customerName: json['customerName']?.toString() ?? '',
+      billNo: json['billNo']?.toString() ?? '',
+      billDate: json['billDate']?.toString() ?? '',
+      billAmount: formatNumber(json['billAmount']),
+      creditAmount: formatNumber(json['creditAmount']),
+    );
+  }
+}
+// Add this to TotalSalesReport.dart
+class AuditSummaryReport {
+  final String docNo;
+  final String formName;
+  final String reasonCode;
+  final String createdDate;
+  final String userCreated;
+  final String remarks;
+  final String finalAmount;
+
+  AuditSummaryReport({
+    required this.docNo,
+    required this.formName,
+    required this.reasonCode,
+    required this.createdDate,
+    required this.userCreated,
+    required this.remarks,
+    required this.finalAmount,
+  });
+
+  factory AuditSummaryReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return AuditSummaryReport(
+      docNo: json['strDocNo']?.toString() ?? '',
+      formName: json['strFormName']?.toString() ?? '',
+      reasonCode: json['strReasonCode']?.toString() ?? '',
+      createdDate: json['dteCreatedDate']?.toString() ?? '',
+      userCreated: json['strUserCreated']?.toString() ?? '',
+      remarks: json['strRemarks']?.toString() ?? '',
+      finalAmount: formatNumber(json['finalAmount']),
+    );
+  }
+
+  // Split date and time from createdDate
+  Map<String, String> get splitDateTime {
+    try {
+      List<String> parts = createdDate.split(' ');
+      if (parts.length >= 2) {
+        String datePart = parts[0];
+        String timePart = parts[1].substring(0, 5); // Get HH:MM format
+
+        // Ensure date is in dd-MM-yyyy format
+        String formattedDate = datePart;
+        if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(datePart)) {
+          final dt = DateFormat('yyyy-MM-dd').parse(datePart);
+          formattedDate = DateFormat('dd-MM-yyyy').format(dt);
+        }
+
+        return {
+          'date': formattedDate,
+          'time': timePart,
+        };
+      }
+    } catch (_) {}
+    return {
+      'date': 'N/A',
+      'time': 'N/A',
+    };
+  }
+}
+// Add this to TotalSalesReport.dart
+class AuditItemReport {
+  final String billNo;
+  final String formName;
+  final String createdDate;
+  final String userCreated;
+  final String remarks;
+  final String productName;
+  final String quantity;
+  final String totalPrice;
+
+  AuditItemReport({
+    required this.billNo,
+    required this.formName,
+    required this.createdDate,
+    required this.userCreated,
+    required this.remarks,
+    required this.productName,
+    required this.quantity,
+    required this.totalPrice,
+  });
+
+  factory AuditItemReport.fromJson(Map<String, dynamic> json) {
+    String formatNumber(dynamic value) {
+      if (value == null) return "0.000";
+      double? d = double.tryParse(value.toString());
+      return d != null ? d.toStringAsFixed(3) : value.toString();
+    }
+
+    return AuditItemReport(
+      billNo: json['billNo']?.toString() ?? '',
+      formName: json['strFormName']?.toString() ?? '',
+      createdDate: json['dteCreatedDate']?.toString() ?? '',
+      userCreated: json['strUserCreated']?.toString() ?? '',
+      remarks: json['strRemarks']?.toString() ?? '',
+      productName: json['productName']?.toString() ?? '',
+      quantity: formatNumber(json['quantity']),
+      totalPrice: formatNumber(json['totalPrice']),
+    );
+  }
+
+  // Split date and time from createdDate
+  Map<String, String> get splitDateTime {
+    try {
+      List<String> parts = createdDate.split(' ');
+      if (parts.length >= 2) {
+        String datePart = parts[0];
+        String timePart = parts[1].substring(0, 5); // Get HH:MM format
+
+        // Ensure date is in dd-MM-yyyy format
+        String formattedDate = datePart;
+        if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(datePart)) {
+          final dt = DateFormat('yyyy-MM-dd').parse(datePart);
+          formattedDate = DateFormat('dd-MM-yyyy').format(dt);
+        }
+
+        return {
+          'date': formattedDate,
+          'time': timePart,
+        };
+      }
+    } catch (_) {}
+    return {
+      'date': 'N/A',
+      'time': 'N/A',
+    };
   }
 }
