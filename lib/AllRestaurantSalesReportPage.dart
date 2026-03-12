@@ -468,7 +468,7 @@ class _AllRestaurantSalesReportPageState extends State<AllRestaurantSalesReportP
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    DateFormat('dd MMM').format(date),
+                    DateFormat('dd MMM yyyy').format(date),
                     style: const TextStyle(fontSize: 12, color: Color(0xFF2C3E50)),
                     overflow: TextOverflow.ellipsis,
                   ),

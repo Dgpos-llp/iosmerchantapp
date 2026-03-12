@@ -1,6 +1,7 @@
 import 'package:excel/excel.dart' as excel;
 import 'dart:io';
 import 'dart:math';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -38,6 +39,21 @@ class _DashboardState extends ConsumerState<Dashboard> {
   bool isLoadingOnlineOrders = false;
   Map<String, dynamic> settlementAmounts = {};
 
+  // PAX related variables
+  Map<String, int> outletPaxCounts = {};
+  int totalPaxCount = 0;
+  bool isLoadingPax = false;
+
+  // Period-wise sales variables
+  double todaySalesAmount = 0;
+  double thisMonthSalesAmount = 0;
+  double thisYearSalesAmount = 0;
+  double selectedRangeSalesAmount = 0;
+  bool isLoadingTodaySales = false;
+  bool isLoadingMonthSales = false;
+  bool isLoadingYearSales = false;
+  bool isLoadingSelectedRange = false;
+
   // Animation controllers
   bool _isHoveringExport = false;
   bool _isHoveringRefresh = false;
@@ -57,6 +73,136 @@ class _DashboardState extends ConsumerState<Dashboard> {
   }
 
   bool get hasOnlyOneDb => widget.dbToBrandMap.length == 1;
+
+  String getSelectedRangeLabel() {
+    if (selectedDateRange == null) return "Today";
+
+    final start = selectedDateRange!.start;
+    final end = selectedDateRange!.end;
+
+    if (start.year == end.year && start.month == end.month && start.day == end.day) {
+      return DateFormat('dd MMM').format(start);
+    }
+
+    return "${DateFormat('dd MMM').format(start)} - ${DateFormat('dd MMM').format(end)}";
+  }
+
+  // Method to fetch sales for any period
+  Future<double> fetchSalesForPeriod(DateTime start, DateTime end) async {
+    final config = await Config.loadFromAsset();
+    String startDate = DateFormat('dd-MM-yyyy').format(start);
+    String endDate = DateFormat('dd-MM-yyyy').format(end);
+
+    List<String> dbs;
+    if (selectedBrand == null || selectedBrand == "All") {
+      dbs = widget.dbToBrandMap.keys.toList();
+    } else {
+      dbs = widget.dbToBrandMap.entries
+          .where((entry) => entry.value == selectedBrand)
+          .map((entry) => entry.key)
+          .toList();
+    }
+
+    final reports = await UserData.fetchTotalSalesForDbs(
+      config,
+      dbs,
+      startDate,
+      endDate,
+    );
+
+    double total = 0;
+    for (final report in reports.values) {
+      total += double.tryParse(report.getField("grandTotal", fallback: "0")) ?? 0;
+    }
+
+    return total;
+  }
+
+  // Method to fetch selected range sales
+  Future<void> fetchSelectedRangeSales() async {
+    if (selectedDateRange == null) return;
+
+    if (mounted) setState(() => isLoadingSelectedRange = true);
+    selectedRangeSalesAmount = await fetchSalesForPeriod(
+        selectedDateRange!.start,
+        selectedDateRange!.end
+    );
+    if (mounted) setState(() => isLoadingSelectedRange = false);
+  }
+
+  // Method to fetch all period sales
+  Future<void> fetchAllPeriodSales() async {
+    DateTime now = DateTime.now();
+
+    // Today
+    if (mounted) setState(() => isLoadingTodaySales = true);
+    todaySalesAmount = await fetchSalesForPeriod(now, now);
+    if (mounted) setState(() => isLoadingTodaySales = false);
+
+    // This Month
+    if (mounted) setState(() => isLoadingMonthSales = true);
+    DateTime monthStart = DateTime(now.year, now.month, 1);
+    thisMonthSalesAmount = await fetchSalesForPeriod(monthStart, now);
+    if (mounted) setState(() => isLoadingMonthSales = false);
+
+    // This Year
+    if (mounted) setState(() => isLoadingYearSales = true);
+    DateTime yearStart = DateTime(now.year, 1, 1);
+    thisYearSalesAmount = await fetchSalesForPeriod(yearStart, now);
+    if (mounted) setState(() => isLoadingYearSales = false);
+  }
+
+  // PAX FETCH METHOD
+  Future<void> fetchPaxData() async {
+    if (!mounted) return;
+    setState(() => isLoadingPax = true);
+
+    final config = await Config.loadFromAsset();
+    String startDate = DateFormat('dd-MM-yyyy').format(selectedDateRange!.start);
+    String endDate = DateFormat('dd-MM-yyyy').format(selectedDateRange!.end);
+
+    List<String> dbs;
+    if (selectedBrand == null || selectedBrand == "All") {
+      dbs = widget.dbToBrandMap.keys.toList();
+    } else {
+      dbs = widget.dbToBrandMap.entries
+          .where((entry) => entry.value == selectedBrand)
+          .map((entry) => entry.key)
+          .toList();
+    }
+
+    try {
+      final Map<String, List<PaxWiseReport>> paxData =
+      await UserData.fetchPaxWiseForDbs(config, dbs, startDate, endDate);
+
+      Map<String, int> tempPaxCounts = {};
+      int tempTotal = 0;
+
+      paxData.forEach((db, reports) {
+        int dbPax = 0;
+        for (var report in reports) {
+          dbPax += report.totalPax.toInt();
+        }
+        tempPaxCounts[db] = dbPax;
+        tempTotal += dbPax;
+      });
+
+      if (mounted) {
+        setState(() {
+          outletPaxCounts = tempPaxCounts;
+          totalPaxCount = tempTotal;
+          isLoadingPax = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching pax data: $e');
+      if (mounted) {
+        setState(() {
+          isLoadingPax = false;
+        });
+      }
+    }
+  }
 
   Future<void> fetchTimeslotSales() async {
     setState(() => isLoadingTimeslotSales = true);
@@ -160,6 +306,27 @@ class _DashboardState extends ConsumerState<Dashboard> {
           ),
         ];
       }
+    } else if (selectedBrand == null || selectedBrand == "All") {
+      double totalDineIn = 0, totalTakeAway = 0, totalDelivery = 0, totalOnline = 0, totalCounter = 0;
+
+      for (final report in totalSalesResponses.values) {
+        totalDineIn += double.tryParse(report.getField("dineInSales", fallback: "0")) ?? 0;
+        totalTakeAway += double.tryParse(report.getField("takeAwaySales", fallback: "0")) ?? 0;
+        totalDelivery += double.tryParse(report.getField("homeDeliverySales", fallback: "0")) ?? 0;
+        totalOnline += double.tryParse(report.getField("onlineSales", fallback: "0")) ?? 0;
+        totalCounter += double.tryParse(report.getField("counterSales", fallback: "0")) ?? 0;
+      }
+
+      return [
+        ChartBarData(
+          "Total",
+          totalDineIn.round(),
+          totalTakeAway.round(),
+          totalDelivery.round(),
+          totalOnline.round(),
+          totalCounter.round(),
+        ),
+      ];
     }
     return [];
   }
@@ -193,6 +360,27 @@ class _DashboardState extends ConsumerState<Dashboard> {
           ),
         ];
       }
+    } else if (selectedBrand == null || selectedBrand == "All") {
+      double totalDineIn = 0, totalTakeAway = 0, totalDelivery = 0, totalOnline = 0, totalCounter = 0;
+
+      for (final report in totalSalesResponses.values) {
+        totalDineIn += double.tryParse(report.getField("dineInSales", fallback: "0")) ?? 0;
+        totalTakeAway += double.tryParse(report.getField("takeAwaySales", fallback: "0")) ?? 0;
+        totalDelivery += double.tryParse(report.getField("homeDeliverySales", fallback: "0")) ?? 0;
+        totalOnline += double.tryParse(report.getField("onlineSales", fallback: "0")) ?? 0;
+        totalCounter += double.tryParse(report.getField("counterSales", fallback: "0")) ?? 0;
+      }
+
+      return [
+        ChartLineData(
+          "Total",
+          totalDineIn.round(),
+          totalTakeAway.round(),
+          totalDelivery.round(),
+          totalOnline.round(),
+          totalCounter.round(),
+        ),
+      ];
     }
     return [];
   }
@@ -200,7 +388,17 @@ class _DashboardState extends ConsumerState<Dashboard> {
   List<PieChartSectionData> get pieChartData {
     List<PieChartSectionData> sections = [];
 
-    if (selectedBrand != null && selectedBrand != "All" && totalSalesResponses.isNotEmpty) {
+    double totalDineIn = 0, totalTakeAway = 0, totalDelivery = 0, totalOnline = 0, totalCounter = 0;
+
+    if (selectedBrand == null || selectedBrand == "All") {
+      for (final report in totalSalesResponses.values) {
+        totalDineIn += double.tryParse(report.getField("dineInSales", fallback: "0")) ?? 0;
+        totalTakeAway += double.tryParse(report.getField("takeAwaySales", fallback: "0")) ?? 0;
+        totalDelivery += double.tryParse(report.getField("homeDeliverySales", fallback: "0")) ?? 0;
+        totalOnline += double.tryParse(report.getField("onlineSales", fallback: "0")) ?? 0;
+        totalCounter += double.tryParse(report.getField("counterSales", fallback: "0")) ?? 0;
+      }
+    } else {
       final entry = widget.dbToBrandMap.entries.firstWhere(
             (e) => e.value == selectedBrand,
         orElse: () => MapEntry('', ''),
@@ -209,71 +407,71 @@ class _DashboardState extends ConsumerState<Dashboard> {
       final report = dbKey != null ? totalSalesResponses[dbKey] : null;
 
       if (report != null) {
-        final dineIn = double.tryParse(report.getField("dineInSales", fallback: "0")) ?? 0;
-        final takeAway = double.tryParse(report.getField("takeAwaySales", fallback: "0")) ?? 0;
-        final delivery = double.tryParse(report.getField("homeDeliverySales", fallback: "0")) ?? 0;
-        final online = double.tryParse(report.getField("onlineSales", fallback: "0")) ?? 0;
-        final counter = double.tryParse(report.getField("counterSales", fallback: "0")) ?? 0;
+        totalDineIn = double.tryParse(report.getField("dineInSales", fallback: "0")) ?? 0;
+        totalTakeAway = double.tryParse(report.getField("takeAwaySales", fallback: "0")) ?? 0;
+        totalDelivery = double.tryParse(report.getField("homeDeliverySales", fallback: "0")) ?? 0;
+        totalOnline = double.tryParse(report.getField("onlineSales", fallback: "0")) ?? 0;
+        totalCounter = double.tryParse(report.getField("counterSales", fallback: "0")) ?? 0;
+      }
+    }
 
-        final total = dineIn + takeAway + delivery + online + counter;
+    final total = totalDineIn + totalTakeAway + totalDelivery + totalOnline + totalCounter;
 
-        if (total > 0) {
-          if (dineIn > 0) {
-            sections.add(
-              PieChartSectionData(
-                value: dineIn,
-                title: '${((dineIn / total) * 100).toStringAsFixed(1)}%',
-                color: Colors.blue,
-                radius: 80,
-                titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            );
-          }
-          if (takeAway > 0) {
-            sections.add(
-              PieChartSectionData(
-                value: takeAway,
-                title: '${((takeAway / total) * 100).toStringAsFixed(1)}%',
-                color: Colors.cyan,
-                radius: 80,
-                titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            );
-          }
-          if (delivery > 0) {
-            sections.add(
-              PieChartSectionData(
-                value: delivery,
-                title: '${((delivery / total) * 100).toStringAsFixed(1)}%',
-                color: Colors.green,
-                radius: 80,
-                titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            );
-          }
-          if (online > 0) {
-            sections.add(
-              PieChartSectionData(
-                value: online,
-                title: '${((online / total) * 100).toStringAsFixed(1)}%',
-                color: Colors.orange,
-                radius: 80,
-                titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            );
-          }
-          if (counter > 0) {
-            sections.add(
-              PieChartSectionData(
-                value: counter,
-                title: '${((counter / total) * 100).toStringAsFixed(1)}%',
-                color: Colors.purple,
-                radius: 80,
-                titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            );
-          }
-        }
+    if (total > 0) {
+      if (totalDineIn > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: totalDineIn,
+            title: '${((totalDineIn / total) * 100).toStringAsFixed(1)}%',
+            color: Colors.blue,
+            radius: 80,
+            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        );
+      }
+      if (totalTakeAway > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: totalTakeAway,
+            title: '${((totalTakeAway / total) * 100).toStringAsFixed(1)}%',
+            color: Colors.cyan,
+            radius: 80,
+            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        );
+      }
+      if (totalDelivery > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: totalDelivery,
+            title: '${((totalDelivery / total) * 100).toStringAsFixed(1)}%',
+            color: Colors.green,
+            radius: 80,
+            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        );
+      }
+      if (totalOnline > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: totalOnline,
+            title: '${((totalOnline / total) * 100).toStringAsFixed(1)}%',
+            color: Colors.orange,
+            radius: 80,
+            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        );
+      }
+      if (totalCounter > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: totalCounter,
+            title: '${((totalCounter / total) * 100).toStringAsFixed(1)}%',
+            color: Colors.purple,
+            radius: 80,
+            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        );
       }
     }
 
@@ -344,6 +542,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
           await fetchTotalSales();
           await fetchTimeslotSales();
           await fetchOnlineOrders();
+          await fetchPaxData();
+          await fetchSelectedRangeSales();
         }
         return;
       default:
@@ -357,6 +557,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
     await fetchTotalSales();
     await fetchTimeslotSales();
     await fetchOnlineOrders();
+    await fetchPaxData();
+    await fetchSelectedRangeSales();
   }
 
   @override
@@ -373,163 +575,57 @@ class _DashboardState extends ConsumerState<Dashboard> {
       fetchTotalSales();
       fetchTimeslotSales();
       fetchOnlineOrders();
+      fetchPaxData();
+      fetchAllPeriodSales();
+      fetchSelectedRangeSales();
     });
   }
 
-  List<Map<String, dynamic>> get summaryTabs {
-    String formatAmount(double value) => "  ${value.toStringAsFixed(3)}";
-    String formatOrders(int value) => "$value Order${value == 1 ? "" : "s"}";
-
-    if (selectedBrand == null || selectedBrand == "All") {
-      double totalSales = 0, dineIn = 0, takeAway = 0, delivery = 0;
-      int totalOrders = 0, dineOrders = 0, takeAwayOrders = 0, deliveryOrders = 0;
-      double counter = 0;
-      int counterOrders = 0;
-
-      for (final report in totalSalesResponses.values) {
-        totalSales   += double.tryParse(report.getField("grandTotal", fallback: "0.000")) ?? 0;
-        dineIn       += double.tryParse(report.getField("dineInSales", fallback: "0.000")) ?? 0;
-        takeAway     += double.tryParse(report.getField("takeAwaySales", fallback: "0.000")) ?? 0;
-        delivery     += double.tryParse(report.getField("homeDeliverySales", fallback: "0.000")) ?? 0;
-        counter += double.tryParse(report.getField("counterSales", fallback: "0.000")) ?? 0;
-        counterOrders += int.tryParse(report.getField("counterOrders", fallback: "0")) ?? 0;
-        totalOrders      += int.tryParse(report.getField("totalOrders", fallback: "0")) ?? 0;
-        dineOrders       += int.tryParse(report.getField("dineInOrders", fallback: "0")) ?? 0;
-        takeAwayOrders   += int.tryParse(report.getField("takeAwayOrders", fallback: "0")) ?? 0;
-        deliveryOrders   += int.tryParse(report.getField("homeDeliveryOrders", fallback: "0")) ?? 0;
-      }
-
-      return [
-        {
-          "title": "Total Sales",
-          "amount": formatAmount(totalSales),
-          "orders": formatOrders(totalOrders),
-          "icon": Icons.trending_up,
-          "iconColor": Color(0xFF4154F1),
-          "gradient": [const Color(0xFF4154F1), const Color(0xFF6B7AF5)],
-        },
-        {
-          "title": "Dine In",
-          "amount": formatAmount(dineIn),
-          "orders": formatOrders(dineOrders),
-          "icon": Icons.restaurant,
-          "iconColor": Color(0xFF2D9CDB),
-          "gradient": [const Color(0xFF2D9CDB), const Color(0xFF5DADE2)],
-        },
-        {
-          "title": "Take Away",
-          "amount": formatAmount(takeAway),
-          "orders": formatOrders(takeAwayOrders),
-          "icon": Icons.takeout_dining,
-          "iconColor": Color(0xFF9B51E0),
-          "gradient": [const Color(0xFF9B51E0), const Color(0xFFBB6BD9)],
-        },
-        {
-          "title": "Delivery",
-          "amount": formatAmount(delivery),
-          "orders": formatOrders(deliveryOrders),
-          "icon": Icons.delivery_dining,
-          "iconColor": Color(0xFFF2994A),
-          "gradient": [const Color(0xFFF2994A), const Color(0xFFF7B731)],
-        },
-        {
-          "title": "Counter",
-          "amount": formatAmount(counter),
-          "orders": formatOrders(counterOrders),
-          "icon": Icons.point_of_sale,
-          "iconColor": Color(0xFF27AE60),
-          "gradient": [const Color(0xFF27AE60), const Color(0xFF6FCF97)],
-        },
-      ];
-    } else {
-      final entry = widget.dbToBrandMap.entries.firstWhere(
-            (e) => e.value == selectedBrand,
-        orElse: () => MapEntry('', ''),
-      );
-      final dbKey = entry.key.isNotEmpty ? entry.key : null;
-      final report = dbKey != null ? totalSalesResponses[dbKey] : null;
-
-      return [
-        {
-          "title": "Total Sales",
-          "amount": safeAmount(report?.getField("grandTotal")),
-          "orders" : "",
-          "icon": Icons.trending_up,
-          "iconColor": Color(0xFF4154F1),
-          "gradient": [const Color(0xFF4154F1), const Color(0xFF6B7AF5)],
-        },
-        {
-          "title": "Dine In",
-          "amount": safeAmount(report?.getField("dineInSales")),
-          "orders" : "",
-          "icon": Icons.restaurant,
-          "iconColor": Color(0xFF2D9CDB),
-          "gradient": [const Color(0xFF2D9CDB), const Color(0xFF5DADE2)],
-        },
-        {
-          "title": "Take Away",
-          "amount": safeAmount(report?.getField("takeAwaySales")),
-          "orders" : "",
-          "icon": Icons.takeout_dining,
-          "iconColor": Color(0xFF9B51E0),
-          "gradient": [const Color(0xFF9B51E0), const Color(0xFFBB6BD9)],
-        },
-        {
-          "title": "Delivery",
-          "amount": safeAmount(report?.getField("homeDeliverySales")),
-          "orders" : "",
-          "icon": Icons.delivery_dining,
-          "iconColor": Color(0xFFF2994A),
-          "gradient": [const Color(0xFFF2994A), const Color(0xFFF7B731)],
-        },
-        {
-          "title": "Counter",
-          "amount": safeAmount(report?.getField("counterSales")),
-          "orders" : "",
-          "icon": Icons.point_of_sale,
-          "iconColor": Color(0xFF27AE60),
-          "gradient": [const Color(0xFF27AE60), const Color(0xFF6FCF97)],
-        },
-      ];
-    }
+  List<Map<String, dynamic>> get dateWiseBoxes {
+    return [
+      {
+        "title": getSelectedRangeLabel(),
+        "amount": isLoadingSelectedRange ? "  Loading..." : formatAmount(selectedRangeSalesAmount),
+        "icon": Icons.calendar_view_day,
+        "gradient": [const Color(0xFF4154F1), const Color(0xFF6B7AF5)],
+      },
+      {
+        "title": "This Month",
+        "amount": isLoadingMonthSales ? "  Loading..." : formatAmount(thisMonthSalesAmount),
+        "icon": Icons.calendar_month,
+        "gradient": [const Color(0xFF2D9CDB), const Color(0xFF5DADE2)],
+      },
+      {
+        "title": "This Year",
+        "amount": isLoadingYearSales ? "  Loading..." : formatAmount(thisYearSalesAmount),
+        "icon": Icons.calendar_today,
+        "gradient": [const Color(0xFF9B51E0), const Color(0xFFBB6BD9)],
+      },
+      {
+        "title": "Total Pax",
+        "amount": isLoadingPax ? "  Loading..." : "  $totalPaxCount",
+        "icon": Icons.people,
+        "gradient": [const Color(0xFFF2994A), const Color(0xFFF7B731)],
+      },
+    ];
   }
 
-  List<Map<String, dynamic>> get additionalSummaryTabs {
+  List<Map<String, dynamic>> get salesTypeBoxes {
+    double dineIn = 0, takeAway = 0, delivery = 0, counter = 0;
+    int dineOrders = 0, takeAwayOrders = 0, deliveryOrders = 0, counterOrders = 0;
+
     if (selectedBrand == null || selectedBrand == "All") {
-      double netSales = 0, discount = 0, tax = 0;
-
       for (final report in totalSalesResponses.values) {
-        netSales += double.tryParse(report.getField("netTotal", fallback: "0.000")) ?? 0;
-        discount += double.tryParse(report.getField("billDiscount", fallback: "0.000")) ?? 0;
-        tax += double.tryParse(report.getField("billTax", fallback: "0.000")) ?? 0;
-      }
+        dineIn += double.tryParse(report.getField("dineInSales", fallback: "0")) ?? 0;
+        takeAway += double.tryParse(report.getField("takeAwaySales", fallback: "0")) ?? 0;
+        delivery += double.tryParse(report.getField("homeDeliverySales", fallback: "0")) ?? 0;
+        counter += double.tryParse(report.getField("counterSales", fallback: "0")) ?? 0;
 
-      return [
-        {
-          "title": "Net Sales",
-          "amount": formatAmount(netSales),
-          "orders": "",
-          "icon": Icons.show_chart,
-          "iconColor": Color(0xFFE67E22),
-          "gradient": [const Color(0xFFE67E22), const Color(0xFFF39C12)],
-        },
-        {
-          "title": "Discounts",
-          "amount": formatAmount(discount),
-          "orders": "",
-          "icon": Icons.discount,
-          "iconColor": Color(0xFFE74C3C),
-          "gradient": [const Color(0xFFE74C3C), const Color(0xFFE67E22)],
-        },
-        {
-          "title": "Taxes",
-          "amount": formatAmount(tax),
-          "orders": "",
-          "icon": Icons.account_balance,
-          "iconColor": Color(0xFF8E44AD),
-          "gradient": [const Color(0xFF8E44AD), const Color(0xFF9B59B6)],
-        },
-      ];
+        dineOrders += int.tryParse(report.getField("dineInOrders", fallback: "0")) ?? 0;
+        takeAwayOrders += int.tryParse(report.getField("takeAwayOrders", fallback: "0")) ?? 0;
+        deliveryOrders += int.tryParse(report.getField("homeDeliveryOrders", fallback: "0")) ?? 0;
+        counterOrders += int.tryParse(report.getField("counterOrders", fallback: "0")) ?? 0;
+      }
     } else {
       final entry = widget.dbToBrandMap.entries.firstWhere(
             (e) => e.value == selectedBrand,
@@ -538,33 +634,45 @@ class _DashboardState extends ConsumerState<Dashboard> {
       final dbKey = entry.key.isNotEmpty ? entry.key : null;
       final report = dbKey != null ? totalSalesResponses[dbKey] : null;
 
-      return [
-        {
-          "title": "Net Sales",
-          "amount": safeAmount(report?.getField("netTotal")),
-          "orders": "",
-          "icon": Icons.show_chart,
-          "iconColor": Color(0xFFE67E22),
-          "gradient": [const Color(0xFFE67E22), const Color(0xFFF39C12)],
-        },
-        {
-          "title": "Discounts",
-          "amount": safeAmount(report?.getField("billDiscount")),
-          "orders": "",
-          "icon": Icons.discount,
-          "iconColor": Color(0xFFE74C3C),
-          "gradient": [const Color(0xFFE74C3C), const Color(0xFFE67E22)],
-        },
-        {
-          "title": "Taxes",
-          "amount": safeAmount(report?.getField("billTax", fallback: "0.000")),
-          "orders": "",
-          "icon": Icons.account_balance,
-          "iconColor": Color(0xFF8E44AD),
-          "gradient": [const Color(0xFF8E44AD), const Color(0xFF9B59B6)],
-        },
-      ];
+      if (report != null) {
+        dineIn = double.tryParse(report.getField("dineInSales", fallback: "0")) ?? 0;
+        takeAway = double.tryParse(report.getField("takeAwaySales", fallback: "0")) ?? 0;
+        delivery = double.tryParse(report.getField("homeDeliverySales", fallback: "0")) ?? 0;
+        counter = double.tryParse(report.getField("counterSales", fallback: "0")) ?? 0;
+
+        dineOrders = int.tryParse(report.getField("dineInOrders", fallback: "0")) ?? 0;
+        takeAwayOrders = int.tryParse(report.getField("takeAwayOrders", fallback: "0")) ?? 0;
+        deliveryOrders = int.tryParse(report.getField("homeDeliveryOrders", fallback: "0")) ?? 0;
+        counterOrders = int.tryParse(report.getField("counterOrders", fallback: "0")) ?? 0;
+      }
     }
+
+    return [
+      {
+        "title": "Dine In",
+        "amount": formatAmount(dineIn),
+        "icon": Icons.restaurant,
+        "gradient": [const Color(0xFF2D9CDB), const Color(0xFF5DADE2)],
+      },
+      {
+        "title": "Counter",
+        "amount": formatAmount(counter),
+        "icon": Icons.point_of_sale,
+        "gradient": [const Color(0xFF9B51E0), const Color(0xFFBB6BD9)],
+      },
+      {
+        "title": "Take Away",
+        "amount": formatAmount(takeAway),
+        "icon": Icons.takeout_dining,
+        "gradient": [const Color(0xFFF2994A), const Color(0xFFF7B731)],
+      },
+      {
+        "title": "Delivery",
+        "amount": formatAmount(delivery),
+        "icon": Icons.delivery_dining,
+        "gradient": [const Color(0xFF27AE60), const Color(0xFF6FCF97)],
+      },
+    ];
   }
 
   List<Map<String, dynamic>> get onlineOrderChannels {
@@ -595,9 +703,34 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
     int colorIndex = 0;
 
-    if (settlementAmounts.isNotEmpty) {
-      settlementAmounts.forEach((mode, amount) {
-        double amountValue = double.tryParse(amount.toString()) ?? 0.0;
+    Map<String, double> totalSettlementAmounts = {};
+
+    if (selectedBrand == null || selectedBrand == "All") {
+      for (final report in totalSalesResponses.values) {
+        if (report.settlementAmounts != null) {
+          report.settlementAmounts!.forEach((mode, amount) {
+            double amountValue = double.tryParse(amount.toString()) ?? 0.0;
+            totalSettlementAmounts[mode] = (totalSettlementAmounts[mode] ?? 0) + amountValue;
+          });
+        }
+      }
+    } else {
+      final entry = widget.dbToBrandMap.entries.firstWhere(
+            (e) => e.value == selectedBrand,
+        orElse: () => MapEntry('', ''),
+      );
+      final dbKey = entry.key.isNotEmpty ? entry.key : null;
+      final report = dbKey != null ? totalSalesResponses[dbKey] : null;
+
+      if (report != null && report.settlementAmounts != null) {
+        report.settlementAmounts!.forEach((mode, amount) {
+          totalSettlementAmounts[mode] = double.tryParse(amount.toString()) ?? 0.0;
+        });
+      }
+    }
+
+    if (totalSettlementAmounts.isNotEmpty) {
+      totalSettlementAmounts.forEach((mode, amountValue) {
         if (amountValue > 0) {
           paymentData.add({
             "color": colors[colorIndex % colors.length],
@@ -647,8 +780,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
     setState(() {
       isLoading = true;
       totalSalesResponses = {};
-      String startDate = DateFormat('dd-MM-yyyy').format(selectedDateRange!.start);
-      String endDate = DateFormat('dd-MM-yyyy').format(selectedDateRange!.end);
     });
 
     final config = await Config.loadFromAsset();
@@ -689,9 +820,11 @@ class _DashboardState extends ConsumerState<Dashboard> {
   String getField(String key, {String fallback = "0.000"}) {
     if (selectedBrand == null || selectedBrand == "All") {
       if (totalSalesResponses.isEmpty) return fallback;
-      final report = totalSalesResponses.entries.isNotEmpty ? totalSalesResponses.entries.first.value : null;
-      if (report == null) return fallback;
-      return report.getField(key, fallback: fallback);
+      double total = 0;
+      for (final report in totalSalesResponses.values) {
+        total += double.tryParse(report.getField(key, fallback: fallback)) ?? 0;
+      }
+      return total.toStringAsFixed(3);
     } else {
       final dbKey = widget.dbToBrandMap.entries.firstWhere((e) => e.value == selectedBrand).key;
       final report = totalSalesResponses[dbKey];
@@ -700,7 +833,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
     }
   }
 
-  @override
+  bool showOutletStatsTable = true;
+
   @override
   Widget build(BuildContext context) {
     final onlineTotals = onlineOrderTotals;
@@ -708,9 +842,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final mediaQuery = MediaQuery.of(context);
     final size = mediaQuery.size;
 
-    // Use a smaller threshold for the header overlap specifically
     final bool isHeaderMobile = size.width < 700;
-    // Keep your original logic for the body layout
     final bool isMobile = size.width < 1100;
 
     return SidePanel(
@@ -722,10 +854,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
           elevation: 0,
           toolbarHeight: 70,
           automaticallyImplyLeading: false,
-          centerTitle: false, // Change to false
+          centerTitle: false,
           title: Padding(
             padding: EdgeInsets.only(
-              left: isHeaderMobile ? 50 : 0, // Add left padding on mobile to clear the hamburger
+              left: isHeaderMobile ? 50 : 0,
             ),
             child: const Text(
               "Dashboard",
@@ -736,12 +868,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
               ),
             ),
           ),
-          // FIX 2: Increased leadingWidth to accommodate both the sidebar toggle and selector
           leadingWidth: isHeaderMobile ? 80 : 380,
           leading: isHeaderMobile ? null : Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // FIX 3: 70px spacer provides clear room for the SidePanel menu button
               const SizedBox(width: 70),
               if (!hasOnlyOneDb)
                 Container(
@@ -781,6 +911,9 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         await fetchTotalSales();
                         await fetchTimeslotSales();
                         await fetchOnlineOrders();
+                        await fetchPaxData();
+                        await fetchAllPeriodSales();
+                        await fetchSelectedRangeSales();
                       },
                     ),
                   ),
@@ -814,6 +947,9 @@ class _DashboardState extends ConsumerState<Dashboard> {
                 await fetchTotalSales();
                 await fetchTimeslotSales();
                 await fetchOnlineOrders();
+                await fetchPaxData();
+                await fetchAllPeriodSales();
+                await fetchSelectedRangeSales();
               },
               isHovering: _isHoveringRefresh,
               onHover: (value) => setState(() => _isHoveringRefresh = value),
@@ -852,6 +988,9 @@ class _DashboardState extends ConsumerState<Dashboard> {
                             await fetchTotalSales();
                             await fetchTimeslotSales();
                             await fetchOnlineOrders();
+                            await fetchPaxData();
+                            await fetchAllPeriodSales();
+                            await fetchSelectedRangeSales();
                           },
                         ),
                       ),
@@ -889,52 +1028,90 @@ class _DashboardState extends ConsumerState<Dashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (hasOnlyOneDb || (selectedBrand != null && selectedBrand != "All")) ...[
-                    _buildStatsGrid(context),
-                    const SizedBox(height: 24),
-                    if (isMobile) ...[
-                      _buildPieChartSection(true),
-                      const SizedBox(height: 24),
-                      _buildChartSection(true),
-                    ] else ...[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 1, child: _buildPieChartSection(false)),
-                          const SizedBox(width: 24),
-                          Expanded(flex: 2, child: _buildChartSection(false)),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    if (isMobile) ...[
-                      _buildOnlineOrdersSection(true, onlineTotals),
-                      const SizedBox(height: 24),
-                      _buildPaymentBifurcationSection(true),
-                    ] else ...[
-                      IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Column(
                           children: [
-                            Expanded(child: _buildOnlineOrdersSection(false, onlineTotals)),
-                            const SizedBox(width: 24),
-                            Expanded(child: _buildPaymentBifurcationSection(false)),
+                            _buildCompactStatsGrid(dateWiseBoxes, crossAxisCount: 4, targetHeight: 90),
+                            const SizedBox(height: 16),
+                            _buildCompactStatsGrid(salesTypeBoxes, crossAxisCount: 4, targetHeight: 100),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        flex: 1,
+                        child: _buildPaymentBifurcationSection(false),
+                      ),
                     ],
-                  ],
-                  if (selectedBrand == null || selectedBrand == "All") ...[
-                    _buildStatsGrid(context),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  if (isMobile) ...[
+                    _buildPieChartSection(true),
                     const SizedBox(height: 24),
-                    _buildOutletwiseStatisticsTable(context, isMobile: size.width < 600),
+                    _buildChartSection(true),
+                  ] else ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 1, child: _buildPieChartSection(false)),
+                        const SizedBox(width: 24),
+                        Expanded(flex: 2, child: _buildChartSection(false)),
+                      ],
+                    ),
                   ],
+
+                  const SizedBox(height: 24),
+
+                  _buildOnlineOrdersSection(isMobile, onlineTotals),
+
+                  const SizedBox(height: 24),
+
+                  _buildOutletwiseStatisticsTable(context, isMobile: size.width < 600),
                 ],
               ),
             );
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildCompactStatsGrid(List<Map<String, dynamic>> statsData, {required int crossAxisCount, required double targetHeight}) {
+    final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+
+    double padding = 48;
+    double availableWidth = (screenWidth * 2 / 3) - padding;
+
+    double cardWidth = (availableWidth - ((crossAxisCount - 1) * 16)) / crossAxisCount;
+    double childAspectRatio = cardWidth / targetHeight;
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: childAspectRatio,
+      ),
+      itemCount: statsData.length,
+      itemBuilder: (context, index) {
+        final stat = statsData[index];
+        return _buildModernCard(
+          title: stat["title"]!,
+          amount: (stat["amount"] as String).replaceAll("  ", ""),
+          orders: stat["orders"] ?? "",
+          icon: stat["icon"],
+          gradientColors: stat["gradient"] as List<Color>,
+        );
+      },
     );
   }
 
@@ -1053,56 +1230,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
     );
   }
 
-  Widget _buildSummaryCards(bool isMobile) {
-    final tabs = summaryTabs;
-    if (tabs.isEmpty) return const SizedBox.shrink();
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(tabs.length, (index) {
-          final tab = tabs[index];
-          return Container(
-            width: isMobile ? 200 : 240,
-            margin: EdgeInsets.only(right: isMobile ? 12 : 20),
-            child: _buildModernCard(
-              title: tab["title"],
-              amount: (tab["amount"] as String).replaceAll("  ", ""),
-              orders: tab["orders"],
-              icon: tab["icon"],
-              gradientColors: tab["gradient"] as List<Color>,
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildAdditionalSummaryCards(bool isMobile) {
-    final tabs = additionalSummaryTabs;
-    if (tabs.isEmpty) return const SizedBox.shrink();
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(tabs.length, (index) {
-          final tab = tabs[index];
-          return Container(
-            width: isMobile ? 200 : 240,
-            margin: EdgeInsets.only(right: isMobile ? 12 : 20),
-            child: _buildModernCard(
-              title: tab["title"],
-              amount: (tab["amount"] as String).replaceAll("  ", ""),
-              orders: tab["orders"],
-              icon: tab["icon"],
-              gradientColors: tab["gradient"] as List<Color>,
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
   Widget _buildModernCard({
     required String title,
     required String amount,
@@ -1120,10 +1247,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(15), // Reduced padding to save space
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween, // Distributes space evenly
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1135,11 +1262,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(icon, color: Colors.white.withOpacity(0.5), size: 18),
+                Icon(icon, color: Colors.white.withOpacity(0.5), size: 16),
               ],
             ),
-            const SizedBox(height: 8),
-            // Use FittedBox to prevent the "22 pixel overflow"
+            const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
@@ -1147,7 +1273,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                 amount,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 22, // Slightly smaller base size
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1155,7 +1281,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
             if (orders.isNotEmpty)
               Text(
                 orders,
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                style: const TextStyle(color: Colors.white70, fontSize: 10),
                 overflow: TextOverflow.ellipsis,
               ),
           ],
@@ -1166,7 +1292,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
   Widget _buildChartSection(bool isMobile) {
     return Container(
-      height: 420, // Match with pie chart card height
+      height: 420,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -1260,7 +1386,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
   Widget _buildPieChartSection(bool isMobile) {
     final pieData = pieChartData;
-    // REMOVED: if (pieData.isEmpty) return const SizedBox.shrink();
 
     return Container(
       height: 420,
@@ -1388,6 +1513,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
   Widget _buildOnlineOrdersSection(bool isMobile, Map<String, dynamic> onlineTotals) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -1471,7 +1597,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
                   color: const Color(0xFF4154F1).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                // FIX 1: errorBuilder prevents the big red "Unable to load asset" box
                 child: Image.asset(
                   channel["icon"],
                   width: 18,
@@ -1481,7 +1606,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
                 ),
               ),
               const SizedBox(width: 6),
-              // FIX 2: Flexible + Overflow prevents the right-side push
               Flexible(
                 child: Text(
                   channel["name"],
@@ -1493,7 +1617,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
             ],
           ),
           const SizedBox(height: 8),
-          // FIX 3: FittedBox shrinks the text size if the number is too long
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
@@ -1532,7 +1655,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
   }
 
   Widget _buildPaymentBifurcationSection(bool isMobile) {
-    final payments = paymentBifurcation; // Get the list of payment data
+    final payments = paymentBifurcation;
 
     return Container(
       decoration: BoxDecoration(
@@ -1547,7 +1670,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
         ],
       ),
       child: Padding(
-        padding: EdgeInsets.all(isMobile ? 16 : 24),
+        padding: EdgeInsets.all(isMobile ? 16 : 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1555,23 +1678,23 @@ class _DashboardState extends ConsumerState<Dashboard> {
             const Text(
               "Payment Bifurcation",
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF2C3E50),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (payments.isEmpty)
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Column(
                     children: [
-                      Icon(Icons.payments_outlined, size: 48, color: Colors.grey[300]),
-                      const SizedBox(height: 12),
+                      Icon(Icons.payments_outlined, size: 40, color: Colors.grey[300]),
+                      const SizedBox(height: 8),
                       const Text(
                         "No Payment Data",
-                        style: TextStyle(color: Color(0xFF95A5A6), fontSize: 14),
+                        style: TextStyle(color: Color(0xFF95A5A6), fontSize: 13),
                       ),
                     ],
                   ),
@@ -1579,7 +1702,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
               )
             else ...[
               _buildPaymentProgressBar(isMobile),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               ...payments.map((p) => Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: _buildPaymentItem(p),
@@ -1595,10 +1718,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final payments = paymentBifurcation;
     if (payments.isEmpty) return const SizedBox.shrink();
 
-    double totalWidth = isMobile ? 280 : 350;
-    double barHeight = 24;
-
-    // Extract values safely
     List<double> values = payments
         .map((p) => double.tryParse(p["value"].toString().replaceAll(" ", "").replaceAll(",", "").trim()) ?? 0)
         .toList();
@@ -1607,24 +1726,26 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
     return Center(
       child: Container(
-        width: totalWidth,
-        height: barHeight,
-        clipBehavior: Clip.antiAlias, // Ensures clean rounded corners for the segments
+        width: double.infinity,
+        height: 20,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(barHeight / 2),
+          borderRadius: BorderRadius.circular(10),
           color: const Color(0xFFF5F7FA),
         ),
         child: total == 0
-            ? Container(color: Colors.grey[200]) // Show grey bar if amounts are all 0
+            ? Container(color: Colors.grey[200])
             : Row(
           children: List.generate(payments.length, (i) {
-            double segmentWidth = totalWidth * (values[i] / total);
+            double segmentWidth = (values[i] / total);
             if (segmentWidth <= 0) return const SizedBox.shrink();
 
-            return Container(
-              width: segmentWidth,
-              height: barHeight,
-              color: payments[i]["color"],
+            return Expanded(
+              flex: (segmentWidth * 100).toInt(),
+              child: Container(
+                height: 20,
+                color: payments[i]["color"],
+              ),
             );
           }),
         ),
@@ -1634,33 +1755,34 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
   Widget _buildPaymentItem(Map<String, dynamic> payment) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Container(
-            width: 12,
-            height: 12,
+            width: 10,
+            height: 10,
             decoration: BoxDecoration(
               color: payment["color"],
-              borderRadius: BorderRadius.circular(3),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               payment["label"],
               style: const TextStyle(
                 fontWeight: FontWeight.w500,
-                fontSize: 14,
+                fontSize: 12,
                 color: Color(0xFF2C3E50),
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           Text(
             payment["value"].toString().replaceAll("  ", ""),
             style: const TextStyle(
               fontWeight: FontWeight.w600,
-              fontSize: 14,
+              fontSize: 12,
               color: Color(0xFF2C3E50),
             ),
           ),
@@ -1669,88 +1791,11 @@ class _DashboardState extends ConsumerState<Dashboard> {
     );
   }
 
-  Widget _buildStatsGrid(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final screenWidth = mediaQuery.size.width;
-
-    // Define horizontal padding based on Scaffold padding
-    double padding = screenWidth < 600 ? 32 : 48;
-    double availableWidth = screenWidth - padding;
-
-    // Determine columns and height based on screen size
-    int crossAxisCount;
-    double targetHeight;
-
-    if (screenWidth < 600) {
-      crossAxisCount = 2; // Mobile
-      targetHeight = 110;
-    } else if (screenWidth < 1200) {
-      crossAxisCount = 4; // Tablet/Small Desktop
-      targetHeight = 120;
-    } else {
-      crossAxisCount = 5; // Large Desktop - Fits "Counter" in one row
-      targetHeight = 130; // Increased height to prevent vertical overflow
-    }
-
-    // Calculate dynamic aspect ratio: Width / Height
-    double cardWidth = (availableWidth - ((crossAxisCount - 1) * 16)) / crossAxisCount;
-    double childAspectRatio = cardWidth / targetHeight;
-
-    final List<List<Color>> gradientColors = [
-      [const Color(0xFF4154F1), const Color(0xFF6B7AF5)],
-      [const Color(0xFF2D9CDB), const Color(0xFF5DADE2)],
-      [const Color(0xFF9B51E0), const Color(0xFFBB6BD9)],
-      [const Color(0xFFF2994A), const Color(0xFFF7B731)],
-      [const Color(0xFF27AE60), const Color(0xFF6FCF97)],
-      [const Color(0xFFE67E22), const Color(0xFFF39C12)],
-      [const Color(0xFFE74C3C), const Color(0xFFE67E22)],
-      [const Color(0xFF8E44AD), const Color(0xFF9B59B6)],
-      [const Color(0xFF3498DB), const Color(0xFF5DADE2)],
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: childAspectRatio,
-      ),
-      itemCount: stats.length,
-      itemBuilder: (context, index) {
-        final stat = stats[index];
-        return _buildModernCard(
-          title: stat["title"]!,
-          amount: (stat["amount"] as String).replaceAll("  ", ""),
-          orders: stat["orders"] ?? "",
-          icon: stat["icon"],
-          gradientColors: gradientColors[index % gradientColors.length],
-        );
-      },
-    );
-  }
-  List<Map<String, dynamic>> get stats {
-    return [
-      {"title": "Total Sales", "amount": "  ${getField("grandTotal", fallback: "0.000")}", "orders": "", "icon": Icons.trending_up},
-      {"title": "Dine In", "amount": "  ${getField("dineInSales", fallback: "0.000")}", "orders": "", "icon": Icons.restaurant},
-      {"title": "Take Away", "amount": "  ${getField("takeAwaySales", fallback: "0.000")}", "orders": "", "icon": Icons.takeout_dining},
-      {"title": "Delivery", "amount": "  ${getField("homeDeliverySales", fallback: "0.000")}", "orders": "", "icon": Icons.delivery_dining},
-      {"title": "Online", "amount": "  ${getField("onlineSales", fallback: "0.000")}", "orders": "", "icon": Icons.shopping_cart},
-      {"title": "Counter", "amount": "  ${getField("counterSales", fallback: "0.000")}", "orders": "", "icon": Icons.point_of_sale},
-      {"title": "Net Sales", "amount": "  ${getField("netTotal", fallback: "0.000")}", "orders": "", "icon": Icons.show_chart},
-      {"title": "Discounts", "amount": "  ${getField("billDiscount", fallback: "0.000")}", "orders": "", "icon": Icons.discount},
-      {"title": "Taxes", "amount": "  ${getField("billTax", fallback: "0.000")}", "orders": "", "icon": Icons.account_balance},
-    ];
-  }
-
-  bool showOutletStatsTable = true;
-
   Widget _buildOutletwiseStatisticsTable(BuildContext context, {required bool isMobile}) {
     final outlets = <Map<String, String>>[];
     num totalOrders = 0, totalSales = 0, totalNetSales = 0, totalTax = 0,
         totalDiscount = 0, totalModified = 0, totalReprinted = 0,
-        totalWaivedOff = 0, totalRoundOff = 0, totalCharges = 0;
+        totalWaivedOff = 0, totalRoundOff = 0, totalCharges = 0, totalPax = 0;
 
     widget.dbToBrandMap.forEach((dbKey, outletName) {
       final report = totalSalesResponses[dbKey];
@@ -1764,6 +1809,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
       final outletWaivedOff = num.tryParse(report?.getField("waivedOff", fallback: "0.000") ?? "0.000") ?? 0;
       final outletRoundOff = num.tryParse(report?.getField("roundOff", fallback: "0.000") ?? "0.000") ?? 0;
       final outletCharges = num.tryParse(report?.getField("charges", fallback: "0.000") ?? "0.000") ?? 0;
+      final outletPax = outletPaxCounts[dbKey] ?? 0;
 
       totalOrders += outletOrders;
       totalSales += outletSales;
@@ -1775,6 +1821,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
       totalWaivedOff += outletWaivedOff;
       totalRoundOff += outletRoundOff;
       totalCharges += outletCharges;
+      totalPax += outletPax;
 
       outlets.add({
         "Outlet Name": outletName,
@@ -1788,6 +1835,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
         "Waived Off": outletWaivedOff.toStringAsFixed(3),
         "Round Off": outletRoundOff.toStringAsFixed(3),
         "Charges": outletCharges.toStringAsFixed(3),
+        "Pax": outletPax.toString(),
       });
     });
 
@@ -1803,9 +1851,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
       "Waived Off": totalWaivedOff.toStringAsFixed(3),
       "Round Off": totalRoundOff.toStringAsFixed(3),
       "Charges": totalCharges.toStringAsFixed(3),
+      "Pax": totalPax.toString(),
     });
 
-    final columns = ["Outlet Name", "Orders", "Sales", "Net Sales", "Tax", "Discount", "Modified", "Re-Printed", "Waived Off", "Round Off", "Charges"];
+    final columns = ["Outlet Name", "Orders", "Sales", "Net Sales", "Tax", "Discount", "Modified", "Re-Printed", "Waived Off", "Round Off", "Charges", "Pax"];
 
     return Container(
       width: double.infinity,
@@ -1883,23 +1932,37 @@ class _DashboardState extends ConsumerState<Dashboard> {
     sheet.appendRow([]);
     rowNum += 1;
 
-    sheet.appendRow(["Title", "Amount", "Orders"]);
-    for (final card in summaryTabs) {
-      sheet.appendRow([card["title"] ?? "", (card["amount"] ?? "").toString().replaceAll("  ", ""), card["orders"] ?? ""]);
-    }
-    rowNum += summaryTabs.length + 2;
-
-    sheet.appendRow(["Title", "Amount"]);
-    for (final card in additionalSummaryTabs) {
+    sheet.appendRow(["Date Wise Stats"]);
+    for (final card in dateWiseBoxes) {
       sheet.appendRow([card["title"] ?? "", (card["amount"] ?? "").toString().replaceAll("  ", "")]);
     }
-    rowNum += additionalSummaryTabs.length + 2;
+    rowNum += dateWiseBoxes.length + 2;
+
+    sheet.appendRow(["Sales Type Stats"]);
+    for (final card in salesTypeBoxes) {
+      sheet.appendRow([card["title"] ?? "", (card["amount"] ?? "").toString().replaceAll("  ", ""), card["orders"] ?? ""]);
+    }
+    rowNum += salesTypeBoxes.length + 2;
+
+    sheet.appendRow([]);
+    sheet.appendRow(["Payment Mode", "Amount"]);
+    for (final payment in paymentBifurcation) {
+      sheet.appendRow([payment["label"] ?? "", (payment["value"] ?? "").toString().replaceAll("  ", "")]);
+    }
+    rowNum += paymentBifurcation.length + 2;
+
+    sheet.appendRow([]);
+    sheet.appendRow(["Online Orders"]);
+    sheet.appendRow(["Total Sales", onlineOrderTotals['amount'].toStringAsFixed(3)]);
+    sheet.appendRow(["Total Orders", "${onlineOrderTotals['orders']}"]);
+    rowNum += 4;
 
     if (selectedBrand == null || selectedBrand == "All") {
       sheet.appendRow([]);
-      sheet.appendRow(["Outlet Name", "Orders", "Sales", "Net Sales", "Tax", "Discount"]);
+      sheet.appendRow(["Outlet Name", "Orders", "Sales", "Net Sales", "Tax", "Discount", "Modified", "Re-Printed", "Waived Off", "Round Off", "Charges", "Pax"]);
       widget.dbToBrandMap.forEach((dbKey, outletName) {
         final report = totalSalesResponses[dbKey];
+        final pax = outletPaxCounts[dbKey] ?? 0;
         sheet.appendRow([
           outletName,
           report?.getField("occupiedTableCount", fallback: "0") ?? "0",
@@ -1907,17 +1970,15 @@ class _DashboardState extends ConsumerState<Dashboard> {
           double.tryParse(report?.getField("netTotal") ?? "0")?.toStringAsFixed(3) ?? "0.000",
           double.tryParse(report?.getField("billTax") ?? "0")?.toStringAsFixed(3) ?? "0.000",
           double.tryParse(report?.getField("billDiscount") ?? "0")?.toStringAsFixed(3) ?? "0.000",
+          report?.getField("modifiedCount", fallback: "0") ?? "0",
+          report?.getField("reprintCount", fallback: "0") ?? "0",
+          double.tryParse(report?.getField("waivedOff") ?? "0")?.toStringAsFixed(3) ?? "0.000",
+          double.tryParse(report?.getField("roundOff") ?? "0")?.toStringAsFixed(3) ?? "0.000",
+          double.tryParse(report?.getField("charges") ?? "0")?.toStringAsFixed(3) ?? "0.000",
+          pax.toString(),
         ]);
       });
-      rowNum += widget.dbToBrandMap.length + 2;
     }
-
-    sheet.appendRow([]);
-    sheet.appendRow(["Online Channel", "Amount", "Orders"]);
-    for (final channel in onlineOrderChannels) {
-      sheet.appendRow([channel["name"] ?? "", (channel["amount"] ?? "").toString().replaceAll("  ", ""), channel["orders"] ?? ""]);
-    }
-    rowNum += onlineOrderChannels.length + 2;
 
     final fileBytes = excelFile.encode();
 
@@ -1935,7 +1996,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
         );
       }
     } else {
-      // DESKTOP (Windows, Mac, Linux) AND ANDROID
       final String path = '${Directory.current.path}/DashboardExport_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
       final file = File(path);
       await file.writeAsBytes(fileBytes!);
@@ -1951,12 +2011,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
         );
       }
 
-      // Only try to open the file on desktop platforms
       try {
         if (Platform.isWindows) await Process.run('start', [path], runInShell: true);
         else if (Platform.isMacOS) await Process.run('open', [path]);
         else if (Platform.isLinux) await Process.run('xdg-open', [path]);
-        // Android will just save the file without opening
       } catch (_) {}
     }
   }

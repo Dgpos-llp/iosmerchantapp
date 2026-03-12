@@ -6,6 +6,8 @@ import 'package:merchant/TotalSalesReport.dart';
 import 'package:merchant/main.dart';
 import 'SidePanel.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:path_provider/path_provider.dart' as path_provider;
+import 'package:open_file/open_file.dart';
 import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
 class AllBillwiseSalesReportPage extends StatefulWidget {
@@ -29,20 +31,20 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
   String? get singleBrandName => hasOnlyOneDb ? widget.dbToBrandMap.values.first : null;
 
   final List<_Col> _baseColumns = const [
-    _Col('Restaurants', 'restaurant'),
+    _Col('Restaurant', 'restaurant'),
     _Col('Bill No', 'billNo'),
-    _Col('Bill Date', 'billDate'),
-    _Col('Customer Name', 'customerName'),
+    _Col('Date', 'billDate'),
+    _Col('Customer', 'customerName'),
     _Col('Subtotal', 'subtotal'),
-    _Col('Discount', 'billDiscount'),
-    _Col('Net Total', 'netTotal'),
-    _Col('Grand Amount', 'grandAmount'),
-    _Col('Round Off', 'roundOff'),
-    _Col('Tip Amount', 'tipAmount'),
+    _Col('Disc', 'billDiscount'),
+    _Col('Net', 'netTotal'),
+    _Col('Grand', 'grandAmount'),
+    _Col('Round', 'roundOff'),
+    _Col('Tip', 'tipAmount'),
     _Col('Remark', 'remark'),
-    _Col('Packaging Charge', 'packagingCharge'),
-    _Col('Delivery Charges', 'deliveryCharges'),
-    _Col('Discount %', 'discountPercent'),
+    _Col('Pkg', 'packagingCharge'),
+    _Col('Delivery', 'deliveryCharges'),
+    _Col('Disc %', 'discountPercent'),
   ];
 
   List<_Col> _taxColumns = [];
@@ -284,66 +286,98 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
   }
 
   Future<void> _exportExcel() async {
-    final excelFile = excel.Excel.createExcel();
-    final sheet = excelFile['Sheet1'];
-    final boldStyle = excel.CellStyle(bold: true);
+    try {
+      final excelFile = excel.Excel.createExcel();
+      final sheet = excelFile['Sheet1'];
+      final boldStyle = excel.CellStyle(bold: true);
 
-    int rowNum = 0;
-    final reportCell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowNum));
-    reportCell.value = "Billwise Sales Report";
-    reportCell.cellStyle = boldStyle;
-    rowNum += 2;
+      int rowNum = 0;
+      final reportCell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowNum));
+      reportCell.value = "Billwise Sales Report";
+      reportCell.cellStyle = boldStyle;
+      rowNum += 2;
 
-    sheet.appendRow(["Date From", DateFormat('dd-MM-yyyy').format(_startDate), "Date To", DateFormat('dd-MM-yyyy').format(_endDate)]);
-    rowNum += 2;
+      sheet.appendRow(["Date From", DateFormat('dd-MM-yyyy').format(_startDate), "Date To", DateFormat('dd-MM-yyyy').format(_endDate)]);
+      rowNum += 2;
 
-    final headerTitles = _visibleColumns.map((c) => c.title).toList();
-    for (int i = 0; i < headerTitles.length; i++) {
-      final cell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum));
-      cell.value = headerTitles[i];
-      cell.cellStyle = boldStyle;
-    }
-    rowNum++;
-
-    for (final row in _allRows) {
-      for (int i = 0; i < _visibleColumns.length; i++) {
+      final headerTitles = _visibleColumns.map((c) => c.title).toList();
+      for (int i = 0; i < headerTitles.length; i++) {
         final cell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum));
-        cell.value = row[_visibleColumns[i].key] ?? '';
+        cell.value = headerTitles[i];
+        cell.cellStyle = boldStyle;
       }
       rowNum++;
-    }
 
-    // Totals Row in Excel
-    for (int i = 0; i < _visibleColumns.length; i++) {
-      final colKey = _visibleColumns[i].key;
-      final cell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum));
-      if (colKey == 'restaurant') cell.value = 'Total';
-      else if (totals.containsKey(colKey)) cell.value = _to3(totals[colKey]);
-      else if (taxTotals.containsKey(colKey)) cell.value = _to3(taxTotals[colKey]);
-      else if (settlementTotals.containsKey(colKey)) cell.value = _to3(settlementTotals[colKey]);
-      cell.cellStyle = boldStyle;
-    }
+      for (final row in _allRows) {
+        for (int i = 0; i < _visibleColumns.length; i++) {
+          final cell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum));
+          cell.value = row[_visibleColumns[i].key] ?? '';
+        }
+        rowNum++;
+      }
 
-    final fileBytes = excelFile.encode();
-    if (kIsWeb) {
-      web_exporter.saveFileWeb(fileBytes!, 'AllBillwiseSales.xlsx');
+      // Totals Row in Excel
+      for (int i = 0; i < _visibleColumns.length; i++) {
+        final colKey = _visibleColumns[i].key;
+        final cell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum));
+        if (colKey == 'restaurant') cell.value = 'Total';
+        else if (totals.containsKey(colKey)) cell.value = _to3(totals[colKey]);
+        else if (taxTotals.containsKey(colKey)) cell.value = _to3(taxTotals[colKey]);
+        else if (settlementTotals.containsKey(colKey)) cell.value = _to3(settlementTotals[colKey]);
+        cell.cellStyle = boldStyle;
+      }
+
+      final fileBytes = excelFile.encode();
+
+      if (kIsWeb) {
+        web_exporter.saveFileWeb(fileBytes!, 'AllBillwiseSales.xlsx');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Excel downloaded successfully'),
+              backgroundColor: Color(0xFF27AE60),
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        // For Android and Windows
+        final directory = await path_provider.getExternalStorageDirectory() ??
+            await path_provider.getApplicationDocumentsDirectory();
+        final String path = '${directory.path}/BillwiseSalesReport_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final file = File(path);
+        await file.writeAsBytes(fileBytes!);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Excel saved successfully'),
+              backgroundColor: const Color(0xFF27AE60),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+
+        // Try to open the file
+        try {
+          await OpenFile.open(path);
+        } catch (e) {
+          print('Could not open file: $e');
+        }
+      }
+    } catch (e) {
+      print('Error exporting Excel: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Excel downloaded successfully'), backgroundColor: Color(0xFF27AE60), behavior: SnackBarBehavior.floating));
+          SnackBar(
+            content: Text('Error exporting Excel'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-    } else {
-      final String path = '${Directory.current.path}/AllBillwiseSales.xlsx';
-      final file = File(path);
-      await file.writeAsBytes(fileBytes!);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Excel exported successfully to $path'), backgroundColor: const Color(0xFF27AE60), behavior: SnackBarBehavior.floating));
-      }
-      try {
-        if (Platform.isWindows) await Process.run('start', [path], runInShell: true);
-        else if (Platform.isMacOS) await Process.run('open', [path]);
-        else if (Platform.isLinux) await Process.run('xdg-open', [path]);
-      } catch (_) {}
     }
   }
 
@@ -373,7 +407,7 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
           automaticallyImplyLeading: false,
           centerTitle: true,
           title: const Text(
-            "Billwise Sales Report",
+            "Billwise Sales",
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50)),
           ),
           leadingWidth: isHeaderMobile ? 80 : 380,
@@ -404,7 +438,7 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: _buildTable(),
+                  child: _buildTable(isMobile),
                 ),
               ),
             ),
@@ -490,6 +524,7 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
     );
   }
 
+  // UPDATED: Responsive filter section
   Widget _buildFilterSection(List<String> keys, String selected, Map<String, String> displayMap, bool isMobile) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -499,25 +534,66 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end, // Aligns buttons with the input boxes
-          children: [
-            _buildDateFilter("Start Date", _startDate, (d) { setState(() => _startDate = d); _fetchData(); }),
+      child: isMobile
+          ? _buildMobileFilter(keys, selected, displayMap)
+          : _buildDesktopFilter(keys, selected, displayMap),
+    );
+  }
+
+  // Desktop filter layout
+  Widget _buildDesktopFilter(List<String> keys, String selected, Map<String, String> displayMap) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _buildDateFilter("Start", _startDate, (d) { setState(() => _startDate = d); _fetchData(); }, isMobile: false),
+          const SizedBox(width: 16),
+          _buildDateFilter("End", _endDate, (d) { setState(() => _endDate = d); _fetchData(); }, isMobile: false),
+          const SizedBox(width: 16),
+          if (!hasOnlyOneDb) ...[
+            _buildDropdownFilter("Outlet", keys, selected, displayMap, isMobile: false),
             const SizedBox(width: 16),
-            _buildDateFilter("End Date", _endDate, (d) { setState(() => _endDate = d); _fetchData(); }),
-            const SizedBox(width: 16),
-            if (!hasOnlyOneDb) _buildDropdownFilter("Outlet", keys, selected, displayMap),
-            const SizedBox(width: 16),
-            _buildActionButtons(),
           ],
-        ),
+          _buildActionButtons(isMobile: false),
+        ],
       ),
     );
   }
 
-  Widget _buildDateFilter(String label, DateTime date, Function(DateTime) onPicked) {
+  // Mobile filter layout
+  Widget _buildMobileFilter(List<String> keys, String selected, Map<String, String> displayMap) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Date filters in a row
+        Row(
+          children: [
+            Expanded(
+              child: _buildDateFilter("Start", _startDate, (d) { setState(() => _startDate = d); _fetchData(); }, isMobile: true),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildDateFilter("End", _endDate, (d) { setState(() => _endDate = d); _fetchData(); }, isMobile: true),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Outlet dropdown if multiple outlets
+        if (!hasOnlyOneDb) ...[
+          _buildDropdownFilter("Outlet", keys, selected, displayMap, isMobile: true),
+          const SizedBox(height: 12),
+        ],
+
+        // Action buttons
+        _buildActionButtons(isMobile: true),
+      ],
+    );
+  }
+
+  // UPDATED: Date filter with full year
+  Widget _buildDateFilter(String label, DateTime date, Function(DateTime) onPicked, {required bool isMobile}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -525,18 +601,33 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
         const SizedBox(height: 4),
         InkWell(
           onTap: () async {
-            final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2100));
+            final picked = await showDatePicker(
+                context: context,
+                initialDate: date,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100)
+            );
             if (picked != null) onPicked(picked);
           },
           child: Container(
-            width: 150, height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0)), borderRadius: BorderRadius.circular(10)),
+            width: isMobile ? double.infinity : 150,
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE0E0E0)),
+                borderRadius: BorderRadius.circular(8)
+            ),
             child: Row(
               children: [
                 const Icon(Icons.calendar_today, size: 14, color: Color(0xFF7F8C8D)),
-                const SizedBox(width: 8),
-                Text(DateFormat('dd MMM yyyy').format(date), style: const TextStyle(fontSize: 12, color: Color(0xFF2C3E50))),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    DateFormat('dd MMM yyyy').format(date),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF2C3E50)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),
@@ -545,22 +636,34 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
     );
   }
 
-  Widget _buildDropdownFilter(String label, List<String> keys, String selected, Map<String, String> displayMap) {
+  // UPDATED: Dropdown filter with responsive width
+  Widget _buildDropdownFilter(String label, List<String> keys, String selected, Map<String, String> displayMap, {required bool isMobile}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF7F8C8D))),
         const SizedBox(height: 4),
         Container(
-          width: 180, height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0)), borderRadius: BorderRadius.circular(10)),
+          width: isMobile ? double.infinity : 180,
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(8)
+          ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: keys.contains(selected) ? selected : keys.first,
               isExpanded: true,
-              items: keys.map((v) => DropdownMenuItem(value: v, child: Text(displayMap[v] ?? v, style: const TextStyle(fontSize: 12)))).toList(),
-              onChanged: (val) { setState(() => selectedDbKey = val); _fetchData(); },
+              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF7F8C8D), size: 18),
+              items: keys.map((v) => DropdownMenuItem(
+                  value: v,
+                  child: Text(displayMap[v] ?? v, style: const TextStyle(fontSize: 12))
+              )).toList(),
+              onChanged: (val) {
+                setState(() => selectedDbKey = val);
+                _fetchData();
+              },
             ),
           ),
         ),
@@ -568,57 +671,169 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
     );
   }
 
-  Widget _buildActionButtons() {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ColumnsDropdownButton(
-            allColumns: _allColumns,
-            visibleColumns: _visibleColumns,
-            onToggleColumn: _toggleColumn,
-            color: const Color(0xFF4154F1),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _exportExcel,
-            icon: const Icon(Icons.file_download, size: 16),
-            label: const Text("Excel", style: TextStyle(fontSize: 13)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF27AE60),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              minimumSize: const Size(100, 40),
+  // UPDATED: Action buttons with smaller size on mobile
+  Widget _buildActionButtons({required bool isMobile}) {
+    if (isMobile) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _showColumnSelector(),
+              icon: const Icon(Icons.view_column, size: 16, color: Color(0xFF4154F1)),
+              label: const Text("Columns", style: TextStyle(fontSize: 12, color: Color(0xFF4154F1))),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFE0E0E0)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: const Size(80, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: _fetchData,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4154F1),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              minimumSize: const Size(100, 40),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: _exportExcel,
+              icon: const Icon(Icons.file_download, size: 14),
+              label: const Text("Excel", style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF27AE60),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: const Size(70, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                elevation: 0,
+              ),
             ),
-            child: const Text("Search", style: TextStyle(fontSize: 13)),
-          ),
-        ],
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _fetchData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4154F1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: const Size(70, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                elevation: 0,
+              ),
+              child: const Text("Search", style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ColumnsDropdownButton(
+              allColumns: _allColumns,
+              visibleColumns: _visibleColumns,
+              onToggleColumn: _toggleColumn,
+              color: const Color(0xFF4154F1),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: _exportExcel,
+              icon: const Icon(Icons.file_download, size: 16),
+              label: const Text("Excel", style: TextStyle(fontSize: 13)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF27AE60),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                minimumSize: const Size(100, 40),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: _fetchData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4154F1),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                minimumSize: const Size(100, 40),
+              ),
+              child: const Text("Search", style: TextStyle(fontSize: 13)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  // Helper method to show column selector on mobile
+  void _showColumnSelector() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Select Columns",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _allColumns.length,
+                  itemBuilder: (context, index) {
+                    final col = _allColumns[index];
+                    final isVisible = _visibleColumns.contains(col);
+                    return CheckboxListTile(
+                      value: isVisible,
+                      title: Text(col.title, style: const TextStyle(fontSize: 14)),
+                      activeColor: const Color(0xFF4154F1),
+                      onChanged: (value) {
+                        _toggleColumn(col, value ?? false);
+                        Navigator.pop(context);
+                        _showColumnSelector(); // Reopen to show updated state
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4154F1),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text("Done"),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildTable() {
+  // UPDATED: Table with responsive column widths
+  Widget _buildTable(bool isMobile) {
+    double colWidth = isMobile ? 100.0 : 140.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-          child: const Text("Detailed Sales Summary", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+          child: const Text("Billwise Details", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
         ),
         Expanded(
           child: Scrollbar(
@@ -628,10 +843,10 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
               controller: _horizontalScroll,
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: _visibleColumns.length * 180.0,
+                width: _visibleColumns.length * colWidth,
                 child: Column(
                   children: [
-                    _buildHeaderRow(),
+                    _buildHeaderRow(colWidth),
                     Expanded(
                       child: ListView.builder(
                         controller: _verticalScroll,
@@ -652,11 +867,20 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
                                     settlementColumnNames.contains(col.key);
 
                                 return Container(
-                                  width: 180, height: 48,
+                                  width: colWidth,
+                                  height: 48,
                                   alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: BoxDecoration(color: i % 2 == 0 ? Colors.white : const Color(0xFFF9FAFC), border: Border(right: BorderSide(color: Colors.grey.shade200))),
-                                  child: Text(row[col.key]?.toString() ?? '', style: const TextStyle(fontSize: 13, color: Color(0xFF2C3E50))),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  decoration: BoxDecoration(
+                                      color: i % 2 == 0 ? Colors.white : const Color(0xFFF9FAFC),
+                                      border: Border(right: BorderSide(color: Colors.grey.shade200))
+                                  ),
+                                  child: Text(
+                                    row[col.key]?.toString() ?? '',
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF2C3E50)),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
                                 );
                               }).toList(),
                             ),
@@ -664,7 +888,7 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
                         },
                       ),
                     ),
-                    _buildTotalRow(),
+                    _buildTotalRow(colWidth),
                   ],
                 ),
               ),
@@ -675,9 +899,15 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
     );
   }
 
-  Widget _buildHeaderRow() {
+  Widget _buildHeaderRow(double colWidth) {
     return Container(
-      decoration: BoxDecoration(color: const Color(0xFFF5F7FA), border: Border(bottom: BorderSide(color: Colors.grey.shade300), top: BorderSide(color: Colors.grey.shade300))),
+      decoration: BoxDecoration(
+          color: const Color(0xFFF5F7FA),
+          border: Border(
+              bottom: BorderSide(color: Colors.grey.shade300),
+              top: BorderSide(color: Colors.grey.shade300)
+          )
+      ),
       child: Row(
         children: _visibleColumns.map((col) {
           // Align header text with column data
@@ -690,20 +920,30 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
               settlementColumnNames.contains(col.key);
 
           return Container(
-            width: 180, height: 56,
+            width: colWidth,
+            height: 56,
             alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
-            child: Text(col.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50))),
+            child: Text(
+              col.title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF2C3E50)),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              textAlign: isNumeric ? TextAlign.right : TextAlign.left,
+            ),
           );
         }).toList(),
       ),
     );
   }
 
-  Widget _buildTotalRow() {
+  Widget _buildTotalRow(double colWidth) {
     return Container(
-      decoration: BoxDecoration(color: const Color(0xFFF0F2FF), border: Border(top: BorderSide(color: const Color(0xFF4154F1).withOpacity(0.3), width: 2))),
+      decoration: BoxDecoration(
+          color: const Color(0xFFF0F2FF),
+          border: Border(top: BorderSide(color: const Color(0xFF4154F1).withOpacity(0.3), width: 2))
+      ),
       child: Row(
         children: _visibleColumns.map((col) {
           String text = '';
@@ -722,11 +962,17 @@ class _AllBillwiseSalesReportPageState extends State<AllBillwiseSalesReportPage>
               settlementColumnNames.contains(col.key);
 
           return Container(
-            width: 180, height: 48,
+            width: colWidth,
+            height: 48,
             alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
-            child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF4154F1))),
+            child: Text(
+              text,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4154F1)),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
           );
         }).toList(),
       ),
@@ -771,7 +1017,8 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
               link: _layerLink,
               offset: const Offset(0, 45),
               child: Material(
-                elevation: 8, borderRadius: BorderRadius.circular(12),
+                elevation: 8,
+                borderRadius: BorderRadius.circular(12),
                 child: Container(
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
                   child: StatefulBuilder(
@@ -781,25 +1028,42 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-                          child: Row(children: [Icon(Icons.view_column, size: 18, color: widget.color), const SizedBox(width: 8), const Text("Select Columns", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50)))]),
+                          child: Row(children: [
+                            Icon(Icons.view_column, size: 18, color: widget.color),
+                            const SizedBox(width: 8),
+                            const Text("Select Columns", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50)))
+                          ]),
                         ),
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxHeight: 350),
                           child: ListView(
-                            shrinkWrap: true, padding: const EdgeInsets.symmetric(vertical: 8),
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                             children: widget.allColumns.map((col) {
                               final checked = widget.visibleColumns.contains(col);
                               return CheckboxListTile(
-                                value: checked, title: Text(col.title, style: const TextStyle(fontSize: 13, color: Color(0xFF2C3E50))),
-                                activeColor: widget.color, dense: true,
-                                onChanged: (v) { widget.onToggleColumn(col, v!); setMenuState(() {}); },
+                                value: checked,
+                                title: Text(col.title, style: const TextStyle(fontSize: 13, color: Color(0xFF2C3E50))),
+                                activeColor: widget.color,
+                                dense: true,
+                                onChanged: (v) {
+                                  widget.onToggleColumn(col, v!);
+                                  setMenuState(() {});
+                                },
                               );
                             }).toList(),
                           ),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(16),
-                          child: SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _removeDropdown, style: ElevatedButton.styleFrom(backgroundColor: widget.color), child: const Text("Done", style: TextStyle(color: Colors.white)))),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                                onPressed: _removeDropdown,
+                                style: ElevatedButton.styleFrom(backgroundColor: widget.color),
+                                child: const Text("Done", style: TextStyle(color: Colors.white))
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -814,7 +1078,10 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
     Overlay.of(context).insert(_dropdownOverlay!);
   }
 
-  void _removeDropdown() { _dropdownOverlay?.remove(); _dropdownOverlay = null; }
+  void _removeDropdown() {
+    _dropdownOverlay?.remove();
+    _dropdownOverlay = null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -828,7 +1095,7 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
           foregroundColor: widget.color,
           side: BorderSide(color: widget.color.withOpacity(0.5)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          minimumSize: const Size(110, 40), // Height set to 40
+          minimumSize: const Size(110, 40),
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
       ),

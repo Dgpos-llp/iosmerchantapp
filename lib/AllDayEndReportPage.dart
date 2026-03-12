@@ -2,50 +2,79 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:excel/excel.dart' as excel;
+import 'package:merchant/TotalSalesReport.dart';
 import 'package:merchant/main.dart';
 import 'SidePanel.dart';
-import 'package:merchant/TotalSalesReport.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart' as path_provider;
 import 'package:open_file/open_file.dart';
 import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
-class AllPaxWiseReportPage extends StatefulWidget {
+class AllDayEndReportPage extends StatefulWidget {
   final Map<String, String> dbToBrandMap;
-  const AllPaxWiseReportPage({super.key, required this.dbToBrandMap});
+  const AllDayEndReportPage({super.key, required this.dbToBrandMap});
 
   @override
-  State<AllPaxWiseReportPage> createState() => _AllPaxWiseReportPageState();
+  State<AllDayEndReportPage> createState() => _AllDayEndReportPageState();
 }
 
-class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now();
+class _AllDayEndReportPageState extends State<AllDayEndReportPage> {
+  DateTime _selectedDate = DateTime.now();
   String? selectedDbKey = "All";
   bool _loading = false;
-
-  // Animation states
   bool _isHoveringRefresh = false;
 
   bool get hasOnlyOneDb => widget.dbToBrandMap.length == 1;
   String? get singleBrandName => hasOnlyOneDb ? widget.dbToBrandMap.values.first : null;
 
-  final List<_Col> _allColumns = [
-    const _Col('Restaurant', 'restaurant'),
-    const _Col('Date', 'billDate'),
-    const _Col('Pax', 'totalPax'),
-    const _Col('Amount', 'totalAmount'),
+  // Numeric keys for right alignment
+  final List<String> _numericKeys = [
+    'dineInSaleAmt', 'homeDeliverySaleAmt', 'takeAwaySaleAmt', 'counterSaleAmt',
+    'onlineSaleAmt', 'advanceOrderSaleAmt', 'orderTypeTotal',
+    'deliveryChargeAmt', 'packagingChargeAmt', 'roundOffAmt', 'tipAmt',
+    'cancelAmt', 'paxCount', 'settlementTotal', 'advanceSettlementTotal'
   ];
+
+  final List<_Col> _baseColumns = [
+    const _Col('Restaurant', 'restaurant'),
+    const _Col('Date', 'posDate'),
+    const _Col('Dine In', 'dineInSaleAmt'),
+    const _Col('Home Del', 'homeDeliverySaleAmt'),
+    const _Col('Take Away', 'takeAwaySaleAmt'),
+    const _Col('Counter', 'counterSaleAmt'),
+    const _Col('Online', 'onlineSaleAmt'),
+    const _Col('Advance', 'advanceOrderSaleAmt'),
+    const _Col('Order Total', 'orderTypeTotal'),
+    const _Col('Bills', 'noOfBills'),
+    const _Col('Del Chg', 'deliveryChargeAmt'),
+    const _Col('Pkg Chg', 'packagingChargeAmt'),
+    const _Col('Round Off', 'roundOffAmt'),
+    const _Col('Tip', 'tipAmt'),
+    const _Col('Cancel Bills', 'noOfCancelBills'),
+    const _Col('Cancel Amt', 'cancelAmt'),
+    const _Col('Pax', 'paxCount'),
+  ];
+
+  List<_Col> _settlementColumns = [];
+  List<_Col> _advanceSettlementColumns = [];
+  List<_Col> _groupColumns = [];
+  List<_Col> _taxColumns = [];
+
+  late List<_Col> _allColumns;
   late List<_Col> _visibleColumns;
-  List<_PaxWiseRow> _allRows = [];
+
+  List<Map<String, dynamic>> _allRows = [];
+  Map<String, dynamic> totals = {};
+  List<GroupSalesData> _allGroupRows = [];
 
   final _horizontalScroll = ScrollController();
   final _verticalScroll = ScrollController();
+  final DateFormat _apiDateFormat = DateFormat('dd-MM-yyyy');
 
   @override
   void initState() {
     super.initState();
-    _visibleColumns = List.from(_allColumns);
+    _updateColumnLists();
     if (hasOnlyOneDb) {
       selectedDbKey = widget.dbToBrandMap.keys.first;
     } else {
@@ -61,60 +90,238 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
     super.dispose();
   }
 
-  // Helper to check if a column is numeric for alignment
-  bool _isNumeric(String key) {
-    return key == 'totalPax' || key == 'totalAmount';
+  void _updateColumnLists() {
+    // Settlement columns will be populated dynamically from data
+    _settlementColumns = [];
+    _advanceSettlementColumns = [];
+    _groupColumns = [];
+    _taxColumns = [];
+
+    _allColumns = [
+      ..._baseColumns,
+      ..._settlementColumns,
+      ..._advanceSettlementColumns,
+      ..._taxColumns,
+      ..._groupColumns,
+    ];
+
+    _visibleColumns = List.from(_allColumns);
+  }
+
+  String _format3(dynamic value) {
+    if (value == null) return '0.000';
+    double? d = double.tryParse(value.toString().replaceAll(',', ''));
+    return d != null ? d.toStringAsFixed(3) : '0.000';
   }
 
   Future<void> _fetchData() async {
     setState(() => _loading = true);
     _allRows = [];
+    _allGroupRows = [];
+
+    // Reset totals
+    totals = {
+      'dineInSaleAmt': 0.0,
+      'homeDeliverySaleAmt': 0.0,
+      'takeAwaySaleAmt': 0.0,
+      'counterSaleAmt': 0.0,
+      'onlineSaleAmt': 0.0,
+      'advanceOrderSaleAmt': 0.0,
+      'orderTypeTotal': 0.0,
+      'noOfBills': 0.0,
+      'deliveryChargeAmt': 0.0,
+      'packagingChargeAmt': 0.0,
+      'roundOffAmt': 0.0,
+      'tipAmt': 0.0,
+      'noOfCancelBills': 0.0,
+      'cancelAmt': 0.0,
+      'paxCount': 0.0,
+      'settlementTotal': 0.0,
+      'advanceSettlementTotal': 0.0,
+    };
+
     final config = await Config.loadFromAsset();
-    String startDate = DateFormat('dd-MM-yyyy').format(_startDate);
-    String endDate = DateFormat('dd-MM-yyyy').format(_endDate);
+    String posDate = _apiDateFormat.format(_selectedDate);
 
-    List<String> dbList;
-    if (selectedDbKey == null || selectedDbKey == "All") {
-      dbList = widget.dbToBrandMap.keys.toList();
-    } else {
-      dbList = [selectedDbKey!];
+    List<String> dbList = (selectedDbKey == null || selectedDbKey == "All")
+        ? widget.dbToBrandMap.keys.toList()
+        : [selectedDbKey!];
+
+    Map<String, DayEndReport> dbToDayEnd =
+    await UserData.fetchDayEndForDbs(config, dbList, posDate);
+
+    // Collect unique settlement and advance settlement modes
+    Set<String> uniqueSettlementModes = {};
+    Set<String> uniqueAdvanceSettlementModes = {};
+    Set<String> taxKeys = {};
+    Map<String, double> settlementTotals = {};
+    Map<String, double> advanceSettlementTotals = {};
+    Map<String, double> taxTotals = {};
+
+    for (final entry in dbToDayEnd.entries) {
+      final report = entry.value;
+
+      // Collect settlement modes
+      report.settlementAmounts.forEach((mode, amount) {
+        uniqueSettlementModes.add(mode);
+        settlementTotals[mode] = (settlementTotals[mode] ?? 0) + (double.tryParse(amount.toString()) ?? 0);
+      });
+
+      // Collect advance settlement modes
+      report.advanceSettlementAmounts.forEach((mode, amount) {
+        uniqueAdvanceSettlementModes.add(mode);
+        advanceSettlementTotals[mode] = (advanceSettlementTotals[mode] ?? 0) + (double.tryParse(amount.toString()) ?? 0);
+      });
+
+      // Collect tax keys
+      report.parsedTaxes.forEach((name, amount) {
+        taxKeys.add(name);
+        taxTotals[name] = (taxTotals[name] ?? 0) + amount;
+      });
+
+      // Collect group data
+      _allGroupRows.addAll(report.groupSalesList);
     }
 
-    Map<String, List<PaxWiseReport>> dbToPaxWise =
-    await UserData.fetchPaxWiseForDbs(config, dbList, startDate, endDate);
+    // Create dynamic columns
+    _settlementColumns = uniqueSettlementModes.map((mode) =>
+        _Col('Settle: $mode', 'settle_$mode')).toList();
 
-    if (selectedDbKey == null || selectedDbKey == "All") {
-      for (final db in dbToPaxWise.keys) {
-        final brand = widget.dbToBrandMap[db] ?? db;
-        for (final report in dbToPaxWise[db]!) {
-          _allRows.add(_PaxWiseRow.fromReport(
-            report: report,
-            restaurant: brand,
-          ));
-        }
+    _advanceSettlementColumns = uniqueAdvanceSettlementModes.map((mode) =>
+        _Col('Adv: $mode', 'advSettle_$mode')).toList();
+
+    _taxColumns = taxKeys.map((name) =>
+        _Col('Tax: $name', 'tax_$name')).toList();
+
+    // Create rows
+    for (final entry in dbToDayEnd.entries) {
+      final dbKey = entry.key;
+      final report = entry.value;
+      final brand = widget.dbToBrandMap[dbKey] ?? dbKey;
+
+      Map<String, dynamic> row = {
+        'restaurant': brand,
+        'posDate': posDate,
+        'dineInSaleAmt': _format3(report.dineInSaleAmt),
+        'homeDeliverySaleAmt': _format3(report.homeDeliverySaleAmt),
+        'takeAwaySaleAmt': _format3(report.takeAwaySaleAmt),
+        'counterSaleAmt': _format3(report.counterSaleAmt),
+        'onlineSaleAmt': _format3(report.onlineSaleAmt),
+        'advanceOrderSaleAmt': _format3(report.advanceOrderSaleAmt),
+        'orderTypeTotal': _format3(report.orderTypeTotal),
+        'noOfBills': report.noOfBills,
+        'deliveryChargeAmt': _format3(report.deliveryChargeAmt),
+        'packagingChargeAmt': _format3(report.packagingChargeAmt),
+        'roundOffAmt': _format3(report.roundOffAmt),
+        'tipAmt': _format3(report.tipAmt),
+        'noOfCancelBills': report.noOfCancelBills,
+        'cancelAmt': _format3(report.cancelAmt),
+        'paxCount': report.paxCount,
+      };
+
+      // Add settlement amounts
+      for (final mode in uniqueSettlementModes) {
+        row['settle_$mode'] = _format3(report.settlementAmounts[mode]);
       }
-    } else {
-      final brand = widget.dbToBrandMap[selectedDbKey!] ?? selectedDbKey!;
-      for (final report in dbToPaxWise[selectedDbKey!] ?? []) {
-        _allRows.add(_PaxWiseRow.fromReport(
-          report: report,
-          restaurant: brand,
-        ));
+
+      // Add advance settlement amounts
+      for (final mode in uniqueAdvanceSettlementModes) {
+        row['advSettle_$mode'] = _format3(report.advanceSettlementAmounts[mode]);
       }
+
+      // Add tax amounts
+      final parsedTaxes = report.parsedTaxes;
+      for (final name in taxKeys) {
+        row['tax_$name'] = _format3(parsedTaxes[name]);
+      }
+
+      _allRows.add(row);
+
+      // Calculate totals
+      totals['dineInSaleAmt'] = totals['dineInSaleAmt']! + (double.tryParse(report.dineInSaleAmt) ?? 0);
+      totals['homeDeliverySaleAmt'] = totals['homeDeliverySaleAmt']! + (double.tryParse(report.homeDeliverySaleAmt) ?? 0);
+      totals['takeAwaySaleAmt'] = totals['takeAwaySaleAmt']! + (double.tryParse(report.takeAwaySaleAmt) ?? 0);
+      totals['counterSaleAmt'] = totals['counterSaleAmt']! + (double.tryParse(report.counterSaleAmt) ?? 0);
+      totals['onlineSaleAmt'] = totals['onlineSaleAmt']! + (double.tryParse(report.onlineSaleAmt) ?? 0);
+      totals['advanceOrderSaleAmt'] = totals['advanceOrderSaleAmt']! + (double.tryParse(report.advanceOrderSaleAmt) ?? 0);
+      totals['orderTypeTotal'] = totals['orderTypeTotal']! + report.orderTypeTotal;
+      totals['noOfBills'] = totals['noOfBills']! + (double.tryParse(report.noOfBills) ?? 0);
+      totals['deliveryChargeAmt'] = totals['deliveryChargeAmt']! + (double.tryParse(report.deliveryChargeAmt) ?? 0);
+      totals['packagingChargeAmt'] = totals['packagingChargeAmt']! + (double.tryParse(report.packagingChargeAmt) ?? 0);
+      totals['roundOffAmt'] = totals['roundOffAmt']! + (double.tryParse(report.roundOffAmt) ?? 0);
+      totals['tipAmt'] = totals['tipAmt']! + (double.tryParse(report.tipAmt) ?? 0);
+      totals['noOfCancelBills'] = totals['noOfCancelBills']! + (double.tryParse(report.noOfCancelBills) ?? 0);
+      totals['cancelAmt'] = totals['cancelAmt']! + (double.tryParse(report.cancelAmt) ?? 0);
+      totals['paxCount'] = totals['paxCount']! + (double.tryParse(report.paxCount) ?? 0);
+      totals['settlementTotal'] = totals['settlementTotal']! + report.settlementTotal;
+      totals['advanceSettlementTotal'] = totals['advanceSettlementTotal']! + report.advanceSettlementTotal;
     }
+
+    // Add group summary columns
+    if (_allGroupRows.isNotEmpty) {
+      _groupColumns = [
+        const _Col('Group', 'groupName'),
+        const _Col('Group Net', 'groupNetTotal'),
+        const _Col('Group Gross', 'groupGrossTotal'),
+      ];
+    }
+
+    _updateColumnLists();
     setState(() => _loading = false);
   }
 
-  _PaxWiseRow get totalRow {
-    double sumDouble(String Function(_PaxWiseRow) getter) =>
-        _allRows.fold(0.0, (a, b) => a + (double.tryParse(getter(b)) ?? 0.0));
+  Map<String, dynamic> get totalRow {
+    Map<String, dynamic> row = {
+      'restaurant': 'Total',
+      'posDate': '',
+      'dineInSaleAmt': _format3(totals['dineInSaleAmt']),
+      'homeDeliverySaleAmt': _format3(totals['homeDeliverySaleAmt']),
+      'takeAwaySaleAmt': _format3(totals['takeAwaySaleAmt']),
+      'counterSaleAmt': _format3(totals['counterSaleAmt']),
+      'onlineSaleAmt': _format3(totals['onlineSaleAmt']),
+      'advanceOrderSaleAmt': _format3(totals['advanceOrderSaleAmt']),
+      'orderTypeTotal': _format3(totals['orderTypeTotal']),
+      'noOfBills': totals['noOfBills']?.toStringAsFixed(0) ?? '0',
+      'deliveryChargeAmt': _format3(totals['deliveryChargeAmt']),
+      'packagingChargeAmt': _format3(totals['packagingChargeAmt']),
+      'roundOffAmt': _format3(totals['roundOffAmt']),
+      'tipAmt': _format3(totals['tipAmt']),
+      'noOfCancelBills': totals['noOfCancelBills']?.toStringAsFixed(0) ?? '0',
+      'cancelAmt': _format3(totals['cancelAmt']),
+      'paxCount': totals['paxCount']?.toStringAsFixed(0) ?? '0',
+    };
 
-    return _PaxWiseRow(
-      restaurant: "Total",
-      billDate: "",
-      totalPax: sumDouble((r) => r.totalPax).toStringAsFixed(3),
-      totalAmount: sumDouble((r) => r.totalAmount).toStringAsFixed(3),
-    );
+    // Add settlement totals
+    for (final col in _settlementColumns) {
+      String mode = col.key.replaceFirst('settle_', '');
+      double total = 0;
+      for (final row in _allRows) {
+        total += double.tryParse(row[col.key]?.toString() ?? '0') ?? 0;
+      }
+      row[col.key] = _format3(total);
+    }
+
+    // Add advance settlement totals
+    for (final col in _advanceSettlementColumns) {
+      String mode = col.key.replaceFirst('advSettle_', '');
+      double total = 0;
+      for (final row in _allRows) {
+        total += double.tryParse(row[col.key]?.toString() ?? '0') ?? 0;
+      }
+      row[col.key] = _format3(total);
+    }
+
+    // Add tax totals
+    for (final col in _taxColumns) {
+      String name = col.key.replaceFirst('tax_', '');
+      double total = 0;
+      for (final row in _allRows) {
+        total += double.tryParse(row[col.key]?.toString() ?? '0') ?? 0;
+      }
+      row[col.key] = _format3(total);
+    }
+
+    return row;
   }
 
   void _toggleColumn(_Col col, bool value) {
@@ -124,8 +331,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
           int originalIndex = _allColumns.indexOf(col);
           int insertIndex = 0;
           for (int i = 0; i < _visibleColumns.length; i++) {
-            int currentOriginalIndex = _allColumns.indexOf(_visibleColumns[i]);
-            if (currentOriginalIndex > originalIndex) break;
+            if (_allColumns.indexOf(_visibleColumns[i]) > originalIndex) break;
             insertIndex++;
           }
           _visibleColumns.insert(insertIndex, col);
@@ -139,22 +345,22 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
   Future<void> _exportExcel() async {
     try {
       final excelFile = excel.Excel.createExcel();
-      final sheet = excelFile['Sheet1'];
+      final sheet = excelFile['Day End Report'];
       final boldStyle = excel.CellStyle(bold: true);
 
       int rowNum = 0;
       sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowNum))
-        ..value = "Pax Wise Sales Report"
+        ..value = "Day End Report"
         ..cellStyle = boldStyle;
       rowNum += 2;
 
-      sheet.appendRow(["Date From", DateFormat('dd-MM-yyyy').format(_startDate), "Date To", DateFormat('dd-MM-yyyy').format(_endDate)]);
+      sheet.appendRow(["POS Date", _apiDateFormat.format(_selectedDate)]);
       rowNum += 2;
 
-      final headerRowLabels = _visibleColumns.map((c) => c.title).toList();
-      for (int i = 0; i < headerRowLabels.length; i++) {
+      final headerRow = _visibleColumns.map((c) => c.title).toList();
+      for (int i = 0; i < headerRow.length; i++) {
         sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum))
-          ..value = headerRowLabels[i]
+          ..value = headerRow[i]
           ..cellStyle = boldStyle;
       }
       rowNum++;
@@ -162,21 +368,49 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
       for (final row in _allRows) {
         for (int i = 0; i < _visibleColumns.length; i++) {
           sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum))
-            ..value = row.getField(_visibleColumns[i].key);
+            ..value = row[_visibleColumns[i].key] ?? '';
         }
         rowNum++;
       }
 
+      // Totals row
       for (int i = 0; i < _visibleColumns.length; i++) {
         sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum))
-          ..value = totalRow.getField(_visibleColumns[i].key)
+          ..value = totalRow[_visibleColumns[i].key] ?? ''
           ..cellStyle = boldStyle;
+      }
+      rowNum += 2;
+
+      // Group Sales section if available
+      if (_allGroupRows.isNotEmpty) {
+        sheet.appendRow([]);
+        sheet.appendRow(["Group Sales Details"]);
+        sheet.appendRow(["Group Name", "Net Total", "Gross Total"]);
+
+        double groupNetTotal = 0;
+        double groupGrossTotal = 0;
+
+        for (final group in _allGroupRows) {
+          sheet.appendRow([
+            group.groupName,
+            group.netTotal,
+            group.grossTotal,
+          ]);
+          groupNetTotal += double.tryParse(group.netTotal) ?? 0;
+          groupGrossTotal += double.tryParse(group.grossTotal) ?? 0;
+        }
+
+        sheet.appendRow([
+          "Total",
+          _format3(groupNetTotal),
+          _format3(groupGrossTotal),
+        ]);
       }
 
       final fileBytes = excelFile.encode();
 
       if (kIsWeb) {
-        web_exporter.saveFileWeb(fileBytes!, 'PaxWiseReport.xlsx');
+        web_exporter.saveFileWeb(fileBytes!, 'DayEndReport.xlsx');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -191,7 +425,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
         // For Android and Windows
         final directory = await path_provider.getExternalStorageDirectory() ??
             await path_provider.getApplicationDocumentsDirectory();
-        final String path = '${directory.path}/PaxWiseReport_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final String path = '${directory.path}/DayEndReport_${DateTime.now().millisecondsSinceEpoch}.xlsx';
         final file = File(path);
         await file.writeAsBytes(fileBytes!);
 
@@ -239,7 +473,6 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
       "All": "All Outlets",
       ...{for (final db in dbKeys) db: widget.dbToBrandMap[db]!}
     };
-
     String safeSelectedDbKey = brandDropdownItems.contains(selectedDbKey) ? selectedDbKey! : "All";
 
     return SidePanel(
@@ -253,7 +486,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
           automaticallyImplyLeading: false,
           centerTitle: true,
           title: const Text(
-            "Pax Wise Sales",
+            "Day End",
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50)),
           ),
           leadingWidth: isHeaderMobile ? 80 : 380,
@@ -295,41 +528,39 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
   }
 
   Widget _buildDesktopSelector(List<String> items, Map<String, String> displayMap, String selected) {
-    return Row(
-      children: [
-        const SizedBox(width: 70),
-        if (!hasOnlyOneDb)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFE0E0E0)),
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.white,
-            ),
-            constraints: const BoxConstraints(minWidth: 160, maxWidth: 220),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: selected,
-                icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF7F8C8D)),
-                isExpanded: true,
-                items: items.map((db) => DropdownMenuItem(
-                  value: db,
-                  child: Text(displayMap[db]!, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50))),
-                )).toList(),
-                onChanged: (value) {
-                  setState(() => selectedDbKey = value);
-                  _fetchData();
-                },
-              ),
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.only(left: 12),
-            child: Text(singleBrandName ?? "", style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50))),
+    return Row(children: [
+      const SizedBox(width: 70),
+      if (!hasOnlyOneDb)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
           ),
-      ],
-    );
+          constraints: const BoxConstraints(minWidth: 160, maxWidth: 220),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selected,
+              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF7F8C8D)),
+              isExpanded: true,
+              items: items.map((db) => DropdownMenuItem(
+                value: db,
+                child: Text(displayMap[db]!, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50))),
+              )).toList(),
+              onChanged: (v) {
+                setState(() => selectedDbKey = v);
+                _fetchData();
+              },
+            ),
+          ),
+        )
+      else
+        Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Text(singleBrandName ?? "", style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50))),
+        ),
+    ]);
   }
 
   Widget _buildIconButton({required IconData icon, required VoidCallback onPressed, required bool isHovering, required Function(bool) onHover}) {
@@ -355,18 +586,16 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        children: [
-          const Icon(Icons.home, color: Color(0xFF7F8C8D), size: 16),
-          const SizedBox(width: 7),
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Text("Reports", style: TextStyle(color: Color(0xFF7F8C8D), decoration: TextDecoration.underline, fontSize: 13)),
-          ),
-          const Icon(Icons.chevron_right, color: Color(0xFF7F8C8D), size: 16),
-          const Text("Pax Wise", style: TextStyle(color: Color(0xFF4154F1), fontWeight: FontWeight.w600, fontSize: 13)),
-        ],
-      ),
+      child: Row(children: [
+        const Icon(Icons.home, color: Color(0xFF7F8C8D), size: 16),
+        const SizedBox(width: 7),
+        GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: const Text("Reports", style: TextStyle(color: Color(0xFF7F8C8D), decoration: TextDecoration.underline, fontSize: 13)),
+        ),
+        const Icon(Icons.chevron_right, color: Color(0xFF7F8C8D), size: 16),
+        const Text("Day End", style: TextStyle(color: Color(0xFF4154F1), fontWeight: FontWeight.w600, fontSize: 13)),
+      ]),
     );
   }
 
@@ -393,9 +622,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          _buildDateFilter("Start", _startDate, (d) { setState(() => _startDate = d); _fetchData(); }, isMobile: false),
-          const SizedBox(width: 16),
-          _buildDateFilter("End", _endDate, (d) { setState(() => _endDate = d); _fetchData(); }, isMobile: false),
+          _buildDateFilter("POS Date", _selectedDate, (d) { setState(() => _selectedDate = d); _fetchData(); }, isMobile: false),
           const SizedBox(width: 16),
           if (!hasOnlyOneDb) ...[
             _buildDropdownFilter("Outlet", items, selected, displayMap, isMobile: false),
@@ -412,18 +639,8 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Date filters in a row
-        Row(
-          children: [
-            Expanded(
-              child: _buildDateFilter("Start", _startDate, (d) { setState(() => _startDate = d); _fetchData(); }, isMobile: true),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDateFilter("End", _endDate, (d) { setState(() => _endDate = d); _fetchData(); }, isMobile: true),
-            ),
-          ],
-        ),
+        // Date filter (full width on mobile)
+        _buildDateFilter("POS Date", _selectedDate, (d) { setState(() => _selectedDate = d); _fetchData(); }, isMobile: true),
         const SizedBox(height: 12),
 
         // Outlet dropdown if multiple outlets
@@ -448,10 +665,10 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
         InkWell(
           onTap: () async {
             final picked = await showDatePicker(
-                context: context,
-                initialDate: date,
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2100)
+              context: context,
+              initialDate: date,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now(),
             );
             if (picked != null) onPicked(picked);
           },
@@ -566,40 +783,38 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
         ),
       );
     } else {
-      return Row(
-        children: [
-          ColumnsDropdownButton(
-            allColumns: _allColumns,
-            visibleColumns: _visibleColumns,
-            onToggleColumn: _toggleColumn,
-            color: const Color(0xFF4154F1),
+      return Row(children: [
+        ColumnsDropdownButton(
+          allColumns: _allColumns,
+          visibleColumns: _visibleColumns,
+          onToggleColumn: _toggleColumn,
+          color: const Color(0xFF4154F1),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton.icon(
+          onPressed: _exportExcel,
+          icon: const Icon(Icons.file_download, size: 16),
+          label: const Text("Excel", style: TextStyle(fontSize: 13)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF27AE60),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            minimumSize: const Size(100, 40),
+            elevation: 0,
           ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _exportExcel,
-            icon: const Icon(Icons.file_download, size: 16),
-            label: const Text("Excel", style: TextStyle(fontSize: 13)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF27AE60),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              minimumSize: const Size(100, 40),
-              elevation: 0,
-            ),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton(
+          onPressed: _fetchData,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF4154F1),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            minimumSize: const Size(100, 40),
+            elevation: 0,
           ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: _fetchData,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4154F1),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              minimumSize: const Size(100, 40),
-              elevation: 0,
-            ),
-            child: const Text("Search", style: TextStyle(color: Colors.white, fontSize: 13)),
-          ),
-        ],
-      );
+          child: const Text("Search", style: TextStyle(color: Colors.white, fontSize: 13)),
+        ),
+      ]);
     }
   }
 
@@ -614,7 +829,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(16),
-          height: MediaQuery.of(context).size.height * 0.5,
+          height: MediaQuery.of(context).size.height * 0.6,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -665,7 +880,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
 
   // UPDATED: Table with responsive column widths
   Widget _buildTable(bool isMobile) {
-    double colWidth = isMobile ? 120.0 : 160.0;
+    double colWidth = isMobile ? 100.0 : 130.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -673,7 +888,7 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-          child: const Text("Pax Wise Summary", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+          child: const Text("Day End Summary", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
         ),
         Expanded(
           child: Scrollbar(
@@ -696,22 +911,28 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
                           return Container(
                             decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
                             child: Row(
-                              children: _visibleColumns.map((col) => Container(
-                                width: colWidth,
-                                height: 48,
-                                alignment: _isNumeric(col.key) ? Alignment.centerRight : Alignment.centerLeft,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                decoration: BoxDecoration(
-                                    color: i % 2 == 0 ? Colors.white : const Color(0xFFF9FAFC),
-                                    border: Border(right: BorderSide(color: Colors.grey.shade200))
-                                ),
-                                child: Text(
-                                  row.getField(col.key).toString(),
-                                  style: const TextStyle(fontSize: 12, color: Color(0xFF2C3E50)),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              )).toList(),
+                              children: _visibleColumns.map((col) {
+                                bool isNumeric = _numericKeys.contains(col.key) ||
+                                    col.key.startsWith('settle_') ||
+                                    col.key.startsWith('advSettle_') ||
+                                    col.key.startsWith('tax_');
+                                return Container(
+                                  width: colWidth,
+                                  height: 48,
+                                  alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  decoration: BoxDecoration(
+                                      color: i % 2 == 0 ? Colors.white : const Color(0xFFF9FAFC),
+                                      border: Border(right: BorderSide(color: Colors.grey.shade200))
+                                  ),
+                                  child: Text(
+                                    row[col.key]?.toString() ?? '',
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF2C3E50)),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           );
                         },
@@ -728,54 +949,66 @@ class _AllPaxWiseReportPageState extends State<AllPaxWiseReportPage> {
     );
   }
 
-  Widget _buildHeaderRow(double height, double colWidth) {
+  Widget _buildHeaderRow(double h, double w) {
     return Container(
       decoration: BoxDecoration(
-          color: const Color(0xFFF5F7FA),
-          border: Border(
-              bottom: BorderSide(color: Colors.grey.shade300),
-              top: BorderSide(color: Colors.grey.shade300)
-          )
+        color: const Color(0xFFF5F7FA),
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300),
+          top: BorderSide(color: Colors.grey.shade300),
+        ),
       ),
       child: Row(
-        children: _visibleColumns.map((col) => Container(
-          width: colWidth,
-          height: height,
-          alignment: _isNumeric(col.key) ? Alignment.centerRight : Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
-          child: Text(
-            col.title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF2C3E50)),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
-            textAlign: _isNumeric(col.key) ? TextAlign.right : TextAlign.left,
-          ),
-        )).toList(),
+        children: _visibleColumns.map((col) {
+          bool isNumeric = _numericKeys.contains(col.key) ||
+              col.key.startsWith('settle_') ||
+              col.key.startsWith('advSettle_') ||
+              col.key.startsWith('tax_');
+          return Container(
+            width: w,
+            height: h,
+            alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
+            child: Text(
+              col.title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF2C3E50)),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              textAlign: isNumeric ? TextAlign.right : TextAlign.left,
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildTotalRow(double height, double colWidth) {
+  Widget _buildTotalRow(double h, double w) {
     return Container(
       decoration: BoxDecoration(
-          color: const Color(0xFFF0F2FF),
-          border: Border(top: BorderSide(color: const Color(0xFF4154F1).withOpacity(0.3), width: 2))
+        color: const Color(0xFFF0F2FF),
+        border: Border(top: BorderSide(color: const Color(0xFF4154F1).withOpacity(0.3), width: 2)),
       ),
       child: Row(
-        children: _visibleColumns.map((col) => Container(
-          width: colWidth,
-          height: height,
-          alignment: _isNumeric(col.key) ? Alignment.centerRight : Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
-          child: Text(
-            totalRow.getField(col.key).toString(),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF4154F1)),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-        )).toList(),
+        children: _visibleColumns.map((col) {
+          bool isNumeric = _numericKeys.contains(col.key) ||
+              col.key.startsWith('settle_') ||
+              col.key.startsWith('advSettle_') ||
+              col.key.startsWith('tax_');
+          return Container(
+            width: w,
+            height: h,
+            alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
+            child: Text(
+              totalRow[col.key]?.toString() ?? '',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4154F1)),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -791,42 +1024,19 @@ class _Col {
   int get hashCode => key.hashCode;
 }
 
-class _PaxWiseRow {
-  final String restaurant, billDate, totalPax, totalAmount;
-
-  _PaxWiseRow({required this.restaurant, required this.billDate, required this.totalPax, required this.totalAmount});
-
-  factory _PaxWiseRow.fromReport({required PaxWiseReport report, required String restaurant}) {
-    String format3(String? val) {
-      if (val == null) return "0.000";
-      double d = double.tryParse(val) ?? 0.0;
-      return d.toStringAsFixed(3);
-    }
-    return _PaxWiseRow(
-        restaurant: restaurant,
-        billDate: report.billDate,
-        totalPax: format3(report.totalPax.toString()),
-        totalAmount: format3(report.totalAmount)
-    );
-  }
-
-  dynamic getField(String key) {
-    switch (key) {
-      case 'restaurant': return restaurant;
-      case 'billDate': return billDate;
-      case 'totalPax': return totalPax;
-      case 'totalAmount': return totalAmount;
-      default: return '';
-    }
-  }
-}
-
+// Reuse the ColumnsDropdownButton from your existing code
 class ColumnsDropdownButton extends StatefulWidget {
   final List<_Col> allColumns, visibleColumns;
   final void Function(_Col col, bool value) onToggleColumn;
   final Color color;
 
-  const ColumnsDropdownButton({super.key, required this.allColumns, required this.visibleColumns, required this.onToggleColumn, this.color = const Color(0xFF4154F1)});
+  const ColumnsDropdownButton({
+    super.key,
+    required this.allColumns,
+    required this.visibleColumns,
+    required this.onToggleColumn,
+    this.color = const Color(0xFF4154F1),
+  });
 
   @override
   State<ColumnsDropdownButton> createState() => _ColumnsDropdownButtonState();
@@ -859,11 +1069,16 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-                          child: Row(children: [
-                            Icon(Icons.view_column, size: 18, color: widget.color),
-                            const SizedBox(width: 8),
-                            const Text("Select Columns", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50)))
-                          ]),
+                          child: Row(
+                            children: [
+                              Icon(Icons.view_column, size: 18, color: widget.color),
+                              const SizedBox(width: 8),
+                              const Text(
+                                "Select Columns",
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50)),
+                              ),
+                            ],
+                          ),
                         ),
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxHeight: 350),
@@ -890,9 +1105,9 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
                           child: SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
-                                onPressed: _removeDropdown,
-                                style: ElevatedButton.styleFrom(backgroundColor: widget.color),
-                                child: const Text("Done", style: TextStyle(color: Colors.white))
+                              onPressed: _removeDropdown,
+                              style: ElevatedButton.styleFrom(backgroundColor: widget.color),
+                              child: const Text("Done", style: TextStyle(color: Colors.white)),
                             ),
                           ),
                         ),

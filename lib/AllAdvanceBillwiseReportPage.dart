@@ -10,15 +10,15 @@ import 'package:path_provider/path_provider.dart' as path_provider;
 import 'package:open_file/open_file.dart';
 import 'file_exporter_stub.dart' if (dart.library.html) 'file_exporter_web.dart' as web_exporter;
 
-class AllTimeAuditReportPage extends StatefulWidget {
+class AllAdvanceBillwiseReportPage extends StatefulWidget {
   final Map<String, String> dbToBrandMap;
-  const AllTimeAuditReportPage({super.key, required this.dbToBrandMap});
+  const AllAdvanceBillwiseReportPage({super.key, required this.dbToBrandMap});
 
   @override
-  State<AllTimeAuditReportPage> createState() => _AllTimeAuditReportPageState();
+  State<AllAdvanceBillwiseReportPage> createState() => _AllAdvanceBillwiseReportPageState();
 }
 
-class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
+class _AllAdvanceBillwiseReportPageState extends State<AllAdvanceBillwiseReportPage> {
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
   String? selectedDbKey = "All";
@@ -28,24 +28,34 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
   bool get hasOnlyOneDb => widget.dbToBrandMap.length == 1;
   String? get singleBrandName => hasOnlyOneDb ? widget.dbToBrandMap.values.first : null;
 
-  final List<_Col> _allColumns = [
+  // Base columns (always present)
+  final List<_Col> _baseColumns = [
     const _Col('Restaurant', 'restaurant'),
+    const _Col('Adv No', 'advanceNo'),
+    const _Col('Customer', 'customerName'),
+    const _Col('Order Date', 'orderDate'),
+    const _Col('Pickup', 'pickupDateTime'),
+    const _Col('Subtotal', 'subtotal'),
+    const _Col('Tax', 'tax'),
+    const _Col('Grand', 'grandTotal'),
+    const _Col('Adv Paid', 'advancePaid'),
+    const _Col('Balance', 'balanceAmount'),
     const _Col('Bill No', 'billNo'),
-    const _Col('Table', 'tableNo'),
-    const _Col('KOT Time', 'kotTime'),
-    const _Col('Bill Date', 'billDate'),
-    const _Col('Bill Time', 'billTime'),
-    const _Col('Settle Date', 'settleDate'),
-    const _Col('Settle Time', 'settleTime'),
-    const _Col('Created By', 'userCreated'),
-    const _Col('Edited By', 'userEdited'),
-    const _Col('Remarks', 'remarks'),
-    const _Col('Time Diff', 'timeDifference'),
-    const _Col('Amount', 'billAmount'),
-    const _Col('Settlement', 'settlementMode'),
   ];
+
+  // Dynamic columns
+  List<_Col> _taxColumns = [];
+  List<_Col> _settlementColumns = [];
+
+  late List<_Col> _allColumns;
   late List<_Col> _visibleColumns;
-  List<_TimeAuditRow> _allRows = [];
+
+  List<Map<String, dynamic>> _allRows = [];
+
+  // Totals
+  Map<String, dynamic> totals = {};
+  Map<String, dynamic> taxTotals = {};
+  Map<String, dynamic> settlementTotals = {};
 
   final _horizontalScroll = ScrollController();
   final _verticalScroll = ScrollController();
@@ -54,7 +64,7 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
   @override
   void initState() {
     super.initState();
-    _visibleColumns = List.from(_allColumns);
+    _updateColumnLists();
     if (hasOnlyOneDb) {
       selectedDbKey = widget.dbToBrandMap.keys.first;
     } else {
@@ -70,14 +80,40 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
     super.dispose();
   }
 
-  // Helper to determine if a column is numeric for right-alignment
-  bool _isNumeric(String key) {
-    return ['timeDifference', 'billAmount'].contains(key);
+  void _updateColumnLists() {
+    _allColumns = [
+      ..._baseColumns,
+      ..._settlementColumns,
+      ..._taxColumns,
+    ];
+    _visibleColumns = List.from(_allColumns);
+  }
+
+  String _format3(dynamic value) {
+    if (value == null) return '0.000';
+    double? d = double.tryParse(value.toString().replaceAll(',', ''));
+    return d != null ? d.toStringAsFixed(3) : '0.000';
   }
 
   Future<void> _fetchData() async {
     setState(() => _loading = true);
     _allRows = [];
+
+    // Reset totals
+    totals = {
+      'subtotal': 0.0,
+      'tax': 0.0,
+      'grandTotal': 0.0,
+      'advancePaid': 0.0,
+      'balanceAmount': 0.0,
+    };
+    taxTotals = {};
+    settlementTotals = {};
+
+    // Reset dynamic columns
+    _taxColumns = [];
+    _settlementColumns = [];
+
     final config = await Config.loadFromAsset();
     String startDate = _apiDateFormat.format(_startDate);
     String endDate = _apiDateFormat.format(_endDate);
@@ -86,40 +122,124 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
         ? widget.dbToBrandMap.keys.toList()
         : [selectedDbKey!];
 
-    Map<String, List<TimeAuditReport>> dbToTimeAudit =
-    await UserData.fetchTimeAuditForDbs(config, dbList, startDate, endDate);
+    Map<String, List<AdvanceBillwiseReport>> dbToAdvanceBillwise =
+    await UserData.fetchAdvanceBillwiseForDbs(config, dbList, startDate, endDate);
 
-    for (final dbKey in dbToTimeAudit.keys) {
-      final brand = widget.dbToBrandMap[dbKey] ?? dbKey;
-      for (final report in dbToTimeAudit[dbKey]!) {
-        _allRows.add(_TimeAuditRow.fromReport(report: report, restaurant: brand));
+    // First pass: collect unique tax and settlement columns
+    Set<String> uniqueTaxColumns = {};
+    Set<String> uniqueSettlementColumns = {};
+
+    for (final dbKey in dbToAdvanceBillwise.keys) {
+      for (final report in dbToAdvanceBillwise[dbKey]!) {
+        // Collect tax columns
+        for (final tax in report.taxBreakup) {
+          uniqueTaxColumns.add(tax.columnKey);
+        }
+        // Collect settlement columns
+        for (final settlement in report.settlementBreakup) {
+          uniqueSettlementColumns.add(settlement.name);
+        }
       }
     }
+
+    // Create column definitions
+    _taxColumns = uniqueTaxColumns.map((key) {
+      // Parse name and percent from key (format: "name_percent")
+      List<String> parts = key.split('_');
+      String name = parts[0];
+      String percent = parts.length > 1 ? parts[1] : '';
+      String displayName = percent.isNotEmpty ? "$name $percent%" : name;
+      return _Col(displayName, 'tax_$key');
+    }).toList();
+
+    _settlementColumns = uniqueSettlementColumns.map((name) =>
+        _Col('Settle: $name', 'settle_$name')).toList();
+
+    // Initialize tax totals
+    for (final key in uniqueTaxColumns) {
+      taxTotals[key] = 0.0;
+    }
+
+    // Initialize settlement totals
+    for (final name in uniqueSettlementColumns) {
+      settlementTotals[name] = 0.0;
+    }
+
+    // Second pass: create rows and calculate totals
+    for (final dbKey in dbToAdvanceBillwise.keys) {
+      final brand = widget.dbToBrandMap[dbKey] ?? dbKey;
+      for (final report in dbToAdvanceBillwise[dbKey]!) {
+        Map<String, dynamic> row = {
+          'restaurant': brand,
+          'advanceNo': report.advanceNo,
+          'customerName': report.customerName,
+          'orderDate': report.orderDate,
+          'pickupDateTime': report.pickupDateTime,
+          'subtotal': report.subtotal,
+          'tax': report.tax,
+          'grandTotal': report.grandTotal,
+          'advancePaid': report.advancePaid,
+          'balanceAmount': report.balanceAmount,
+          'billNo': report.billNo,
+        };
+
+        // Add tax columns
+        for (final key in uniqueTaxColumns) {
+          String amount = report.getTaxAmount(key);
+          row['tax_$key'] = amount;
+          taxTotals[key] = (taxTotals[key] ?? 0.0) + (double.tryParse(amount) ?? 0.0);
+        }
+
+        // Add settlement columns
+        for (final name in uniqueSettlementColumns) {
+          String amount = report.getSettlementAmount(name);
+          row['settle_$name'] = amount;
+          settlementTotals[name] = (settlementTotals[name] ?? 0.0) + (double.tryParse(amount) ?? 0.0);
+        }
+
+        _allRows.add(row);
+
+        // Calculate main totals
+        totals['subtotal'] = totals['subtotal']! + (double.tryParse(report.subtotal) ?? 0.0);
+        totals['tax'] = totals['tax']! + (double.tryParse(report.tax) ?? 0.0);
+        totals['grandTotal'] = totals['grandTotal']! + (double.tryParse(report.grandTotal) ?? 0.0);
+        totals['advancePaid'] = totals['advancePaid']! + (double.tryParse(report.advancePaid) ?? 0.0);
+        totals['balanceAmount'] = totals['balanceAmount']! + (double.tryParse(report.balanceAmount) ?? 0.0);
+      }
+    }
+
+    _updateColumnLists();
     setState(() => _loading = false);
   }
 
-  _TimeAuditRow get totalRow {
-    double sumDouble(String Function(_TimeAuditRow) getter) =>
-        _allRows.fold(0.0, (a, b) => a + (double.tryParse(getter(b)) ?? 0.0));
-    int sumInt(String Function(_TimeAuditRow) getter) =>
-        _allRows.fold(0, (a, b) => a + (int.tryParse(getter(b)) ?? 0));
+  Map<String, dynamic> get totalRow {
+    Map<String, dynamic> row = {
+      'restaurant': 'Total',
+      'advanceNo': '',
+      'customerName': '',
+      'orderDate': '',
+      'pickupDateTime': '',
+      'subtotal': _format3(totals['subtotal']),
+      'tax': _format3(totals['tax']),
+      'grandTotal': _format3(totals['grandTotal']),
+      'advancePaid': _format3(totals['advancePaid']),
+      'balanceAmount': _format3(totals['balanceAmount']),
+      'billNo': '',
+    };
 
-    return _TimeAuditRow(
-      restaurant: "Total",
-      billNo: "",
-      tableNo: "",
-      kotTime: "",
-      billDate: "",
-      billTime: "",
-      settleDate: "",
-      settleTime: "",
-      userCreated: "",
-      userEdited: "",
-      remarks: "",
-      timeDifference: sumInt((r) => r.timeDifference).toString(),
-      billAmount: sumDouble((r) => r.billAmount).toStringAsFixed(3),
-      settlementMode: "",
-    );
+    // Add tax totals
+    for (final col in _taxColumns) {
+      String key = col.key.replaceFirst('tax_', '');
+      row[col.key] = _format3(taxTotals[key]);
+    }
+
+    // Add settlement totals
+    for (final col in _settlementColumns) {
+      String name = col.key.replaceFirst('settle_', '');
+      row[col.key] = _format3(settlementTotals[name]);
+    }
+
+    return row;
   }
 
   void _toggleColumn(_Col col, bool value) {
@@ -143,12 +263,12 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
   Future<void> _exportExcel() async {
     try {
       final excelFile = excel.Excel.createExcel();
-      final sheet = excelFile['Sheet1'];
+      final sheet = excelFile['Advance Billwise Report'];
       final boldStyle = excel.CellStyle(bold: true);
 
       int rowNum = 0;
       sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowNum))
-        ..value = "Time Audit Report"
+        ..value = "Advance Billwise Report"
         ..cellStyle = boldStyle;
       rowNum += 2;
 
@@ -165,21 +285,23 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
 
       for (final row in _allRows) {
         for (int i = 0; i < _visibleColumns.length; i++) {
-          sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum)).value = row.getField(_visibleColumns[i].key);
+          sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum))
+            ..value = row[_visibleColumns[i].key] ?? '';
         }
         rowNum++;
       }
 
+      // Totals row
       for (int i = 0; i < _visibleColumns.length; i++) {
         sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowNum))
-          ..value = totalRow.getField(_visibleColumns[i].key)
+          ..value = totalRow[_visibleColumns[i].key] ?? ''
           ..cellStyle = boldStyle;
       }
 
       final fileBytes = excelFile.encode();
 
       if (kIsWeb) {
-        web_exporter.saveFileWeb(fileBytes!, 'TimeAuditReport.xlsx');
+        web_exporter.saveFileWeb(fileBytes!, 'AdvanceBillwiseReport.xlsx');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -194,7 +316,7 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
         // For Android and Windows
         final directory = await path_provider.getExternalStorageDirectory() ??
             await path_provider.getApplicationDocumentsDirectory();
-        final String path = '${directory.path}/TimeAuditReport_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final String path = '${directory.path}/AdvanceBillwiseReport_${DateTime.now().millisecondsSinceEpoch}.xlsx';
         final file = File(path);
         await file.writeAsBytes(fileBytes!);
 
@@ -238,7 +360,10 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
 
     final dbKeys = widget.dbToBrandMap.keys.toList();
     final brandDropdownItems = ["All", ...dbKeys];
-    final brandDisplayMap = {"All": "All Outlets", ...{for (final db in dbKeys) db: widget.dbToBrandMap[db]!}};
+    final brandDisplayMap = {
+      "All": "All Outlets",
+      ...{for (final db in dbKeys) db: widget.dbToBrandMap[db]!}
+    };
     String safeSelectedDbKey = brandDropdownItems.contains(selectedDbKey) ? selectedDbKey! : "All";
 
     return SidePanel(
@@ -251,15 +376,18 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
           toolbarHeight: 70,
           automaticallyImplyLeading: false,
           centerTitle: true,
-          title: const Text("Time Audit", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50))),
+          title: const Text(
+            "Advance Billwise",
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50)),
+          ),
           leadingWidth: isHeaderMobile ? 80 : 380,
           leading: isHeaderMobile ? null : _buildDesktopSelector(brandDropdownItems, brandDisplayMap, safeSelectedDbKey),
           actions: [
             _buildIconButton(
-                icon: Icons.refresh,
-                onPressed: _fetchData,
-                isHovering: _isHoveringRefresh,
-                onHover: (v) => setState(() => _isHoveringRefresh = v)
+              icon: Icons.refresh,
+              onPressed: _fetchData,
+              isHovering: _isHoveringRefresh,
+              onHover: (value) => setState(() => _isHoveringRefresh = value),
             ),
             const SizedBox(width: 16),
           ],
@@ -274,11 +402,14 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
                   : Container(
                 margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                 ),
-                child: ClipRRect(borderRadius: BorderRadius.circular(20), child: _buildTable(isMobile)),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: _buildTable(isMobile),
+                ),
               ),
             ),
           ],
@@ -294,9 +425,9 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFE0E0E0)),
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.white
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
           ),
           constraints: const BoxConstraints(minWidth: 160, maxWidth: 220),
           child: DropdownButtonHideUnderline(
@@ -305,12 +436,8 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
               icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF7F8C8D)),
               isExpanded: true,
               items: items.map((db) => DropdownMenuItem(
-                  value: db,
-                  child: Text(
-                      displayMap[db]!,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50))
-                  )
+                value: db,
+                child: Text(displayMap[db]!, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50))),
               )).toList(),
               onChanged: (v) {
                 setState(() => selectedDbKey = v);
@@ -321,8 +448,8 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
         )
       else
         Padding(
-            padding: const EdgeInsets.only(left: 12),
-            child: Text(singleBrandName ?? "", style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50)))
+          padding: const EdgeInsets.only(left: 12),
+          child: Text(singleBrandName ?? "", style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF2C3E50))),
         ),
     ]);
   }
@@ -337,8 +464,8 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
         child: IconButton(
           icon: Icon(icon, color: isHovering ? const Color(0xFF4154F1) : const Color(0xFF7F8C8D)),
           style: IconButton.styleFrom(
-              backgroundColor: isHovering ? const Color(0xFF4154F1).withOpacity(0.1) : Colors.transparent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+            backgroundColor: isHovering ? const Color(0xFF4154F1).withOpacity(0.1) : Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           onPressed: onPressed,
         ),
@@ -354,11 +481,11 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
         const Icon(Icons.home, color: Color(0xFF7F8C8D), size: 16),
         const SizedBox(width: 7),
         GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Text("Reports", style: TextStyle(color: Color(0xFF7F8C8D), decoration: TextDecoration.underline, fontSize: 13))
+          onTap: () => Navigator.pop(context),
+          child: const Text("Reports", style: TextStyle(color: Color(0xFF7F8C8D), decoration: TextDecoration.underline, fontSize: 13)),
         ),
         const Icon(Icons.chevron_right, color: Color(0xFF7F8C8D), size: 16),
-        const Text("Time Audit", style: TextStyle(color: Color(0xFF4154F1), fontWeight: FontWeight.w600, fontSize: 13)),
+        const Text("Advance Billwise", style: TextStyle(color: Color(0xFF4154F1), fontWeight: FontWeight.w600, fontSize: 13)),
       ]),
     );
   }
@@ -369,9 +496,9 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: isMobile
           ? _buildMobileFilter(items, displayMap, selected)
@@ -561,10 +688,10 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
     } else {
       return Row(children: [
         ColumnsDropdownButton(
-            allColumns: _allColumns,
-            visibleColumns: _visibleColumns,
-            onToggleColumn: _toggleColumn,
-            color: const Color(0xFF4154F1)
+          allColumns: _allColumns,
+          visibleColumns: _visibleColumns,
+          onToggleColumn: _toggleColumn,
+          color: const Color(0xFF4154F1),
         ),
         const SizedBox(width: 12),
         ElevatedButton.icon(
@@ -572,23 +699,23 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
           icon: const Icon(Icons.file_download, size: 16),
           label: const Text("Excel", style: TextStyle(fontSize: 13)),
           style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF27AE60),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              minimumSize: const Size(100, 40),
-              elevation: 0
+            backgroundColor: const Color(0xFF27AE60),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            minimumSize: const Size(100, 40),
+            elevation: 0,
           ),
         ),
         const SizedBox(width: 12),
         ElevatedButton(
           onPressed: _fetchData,
-          child: const Text("Search", style: TextStyle(color: Colors.white, fontSize: 13)),
           style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4154F1),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              minimumSize: const Size(100, 40),
-              elevation: 0
+            backgroundColor: const Color(0xFF4154F1),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            minimumSize: const Size(100, 40),
+            elevation: 0,
           ),
+          child: const Text("Search", style: TextStyle(color: Colors.white, fontSize: 13)),
         ),
       ]);
     }
@@ -658,109 +785,141 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
   Widget _buildTable(bool isMobile) {
     double colWidth = isMobile ? 100.0 : 130.0;
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-          child: const Text("Audit Logs", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)))
-      ),
-      Expanded(
-        child: Scrollbar(
-          controller: _horizontalScroll,
-          thumbVisibility: true,
-          child: SingleChildScrollView(
+          child: const Text("Advance Bills", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+        ),
+        Expanded(
+          child: Scrollbar(
             controller: _horizontalScroll,
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: _visibleColumns.length * colWidth,
-              child: Column(children: [
-                _buildHeaderRow(56, colWidth),
-                Expanded(
-                  child: ListView.builder(
-                    controller: _verticalScroll,
-                    itemCount: _allRows.length,
-                    itemBuilder: (context, i) {
-                      final row = _allRows[i];
-                      return Container(
-                        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
-                        child: Row(children: _visibleColumns.map((col) {
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _horizontalScroll,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: _visibleColumns.length * colWidth,
+                child: Column(
+                  children: [
+                    _buildHeaderRow(56, colWidth),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _verticalScroll,
+                        itemCount: _allRows.length,
+                        itemBuilder: (context, i) {
+                          final row = _allRows[i];
                           return Container(
-                            width: colWidth,
-                            height: 48,
-                            alignment: _isNumeric(col.key) ? Alignment.centerRight : Alignment.centerLeft,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            decoration: BoxDecoration(
-                                color: i % 2 == 0 ? Colors.white : const Color(0xFFF9FAFC),
-                                border: Border(right: BorderSide(color: Colors.grey.shade200))
-                            ),
-                            child: Text(
-                              row.getField(col.key).toString(),
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF2C3E50)),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
+                            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
+                            child: Row(
+                              children: _visibleColumns.map((col) {
+                                // Check if column is numeric for right alignment
+                                bool isNumeric = [
+                                  'subtotal', 'tax', 'grandTotal', 'advancePaid', 'balanceAmount'
+                                ].contains(col.key) ||
+                                    col.key.startsWith('tax_') ||
+                                    col.key.startsWith('settle_');
+
+                                return Container(
+                                  width: colWidth,
+                                  height: 48,
+                                  alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  decoration: BoxDecoration(
+                                      color: i % 2 == 0 ? Colors.white : const Color(0xFFF9FAFC),
+                                      border: Border(right: BorderSide(color: Colors.grey.shade200))
+                                  ),
+                                  child: Text(
+                                    row[col.key]?.toString() ?? '',
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF2C3E50)),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           );
-                        }).toList()),
-                      );
-                    },
-                  ),
+                        },
+                      ),
+                    ),
+                    _buildTotalRow(48, colWidth),
+                  ],
                 ),
-                _buildTotalRow(48, colWidth),
-              ]),
+              ),
             ),
           ),
         ),
-      ),
-    ]);
+      ],
+    );
   }
 
   Widget _buildHeaderRow(double h, double w) {
     return Container(
       decoration: BoxDecoration(
-          color: const Color(0xFFF5F7FA),
-          border: Border(
-              bottom: BorderSide(color: Colors.grey.shade300),
-              top: BorderSide(color: Colors.grey.shade300)
-          )
+        color: const Color(0xFFF5F7FA),
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300),
+          top: BorderSide(color: Colors.grey.shade300),
+        ),
       ),
-      child: Row(children: _visibleColumns.map((col) => Container(
-          width: w,
-          height: h,
-          alignment: _isNumeric(col.key) ? Alignment.centerRight : Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
-          child: Text(
-            col.title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF2C3E50)),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
-            textAlign: _isNumeric(col.key) ? TextAlign.right : TextAlign.left,
-          )
-      )).toList()),
+      child: Row(
+        children: _visibleColumns.map((col) {
+          bool isNumeric = [
+            'subtotal', 'tax', 'grandTotal', 'advancePaid', 'balanceAmount'
+          ].contains(col.key) ||
+              col.key.startsWith('tax_') ||
+              col.key.startsWith('settle_');
+
+          return Container(
+            width: w,
+            height: h,
+            alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
+            child: Text(
+              col.title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF2C3E50)),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              textAlign: isNumeric ? TextAlign.right : TextAlign.left,
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
   Widget _buildTotalRow(double h, double w) {
     return Container(
       decoration: BoxDecoration(
-          color: const Color(0xFFF0F2FF),
-          border: Border(top: BorderSide(color: const Color(0xFF4154F1).withOpacity(0.3), width: 2))
+        color: const Color(0xFFF0F2FF),
+        border: Border(top: BorderSide(color: const Color(0xFF4154F1).withOpacity(0.3), width: 2)),
       ),
-      child: Row(children: _visibleColumns.map((col) {
-        return Container(
+      child: Row(
+        children: _visibleColumns.map((col) {
+          bool isNumeric = [
+            'subtotal', 'tax', 'grandTotal', 'advancePaid', 'balanceAmount'
+          ].contains(col.key) ||
+              col.key.startsWith('tax_') ||
+              col.key.startsWith('settle_');
+
+          return Container(
             width: w,
             height: h,
-            alignment: _isNumeric(col.key) ? Alignment.centerRight : Alignment.centerLeft,
+            alignment: isNumeric ? Alignment.centerRight : Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 6),
             decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
             child: Text(
-              totalRow.getField(col.key).toString(),
+              totalRow[col.key]?.toString() ?? '',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4154F1)),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
-            )
-        );
-      }).toList()),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -768,79 +927,26 @@ class _AllTimeAuditReportPageState extends State<AllTimeAuditReportPage> {
 class _Col {
   final String title, key;
   const _Col(this.title, this.key);
+
   @override
   bool operator ==(Object other) => other is _Col && other.key == key;
   @override
   int get hashCode => key.hashCode;
 }
 
-class _TimeAuditRow {
-  final String restaurant, billNo, tableNo, kotTime, billDate, billTime, settleDate, settleTime, userCreated, userEdited, timeDifference, billAmount, settlementMode;
-  final String? remarks;
-
-  _TimeAuditRow({
-    required this.restaurant,
-    required this.billNo,
-    required this.tableNo,
-    required this.kotTime,
-    required this.billDate,
-    required this.billTime,
-    required this.settleDate,
-    required this.settleTime,
-    required this.userCreated,
-    required this.userEdited,
-    this.remarks,
-    required this.timeDifference,
-    required this.billAmount,
-    required this.settlementMode
-  });
-
-  factory _TimeAuditRow.fromReport({required TimeAuditReport report, required String restaurant}) {
-    String f3(String? v) => (double.tryParse(v ?? '0') ?? 0.0).toStringAsFixed(3);
-    return _TimeAuditRow(
-        restaurant: restaurant,
-        billNo: report.billNo,
-        tableNo: report.tableNo,
-        kotTime: report.kotTime,
-        billDate: report.billDate,
-        billTime: report.billTime,
-        settleDate: report.settleDate,
-        settleTime: report.settleTime,
-        userCreated: report.userCreated,
-        userEdited: report.userEdited,
-        remarks: report.remarks ?? "",
-        timeDifference: report.timeDifference,
-        billAmount: f3(report.billAmount),
-        settlementMode: report.settlementMode
-    );
-  }
-
-  dynamic getField(String k) {
-    switch (k) {
-      case 'restaurant': return restaurant;
-      case 'billNo': return billNo;
-      case 'tableNo': return tableNo;
-      case 'kotTime': return kotTime;
-      case 'billDate': return billDate;
-      case 'billTime': return billTime;
-      case 'settleDate': return settleDate;
-      case 'settleTime': return settleTime;
-      case 'userCreated': return userCreated;
-      case 'userEdited': return userEdited;
-      case 'remarks': return remarks;
-      case 'timeDifference': return timeDifference;
-      case 'billAmount': return billAmount;
-      case 'settlementMode': return settlementMode;
-      default: return '';
-    }
-  }
-}
-
+// Reuse the ColumnsDropdownButton from your existing code
 class ColumnsDropdownButton extends StatefulWidget {
   final List<_Col> allColumns, visibleColumns;
   final void Function(_Col col, bool value) onToggleColumn;
   final Color color;
-  const ColumnsDropdownButton({super.key, required this.allColumns, required this.visibleColumns, required this.onToggleColumn, required this.color});
+
+  const ColumnsDropdownButton({
+    super.key,
+    required this.allColumns,
+    required this.visibleColumns,
+    required this.onToggleColumn,
+    this.color = const Color(0xFF4154F1),
+  });
 
   @override
   State<ColumnsDropdownButton> createState() => _ColumnsDropdownButtonState();
@@ -852,70 +958,79 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
 
   void _showDropdown() {
     if (_dropdownOverlay != null) return;
-    _dropdownOverlay = OverlayEntry(builder: (context) => Stack(children: [
-      Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: _removeDropdown)),
-      Positioned(
-        width: 280,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          offset: const Offset(0, 45),
-          child: Material(
-            elevation: 8,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              child: StatefulBuilder(
-                builder: (context, setMenuState) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
+    _dropdownOverlay = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: _removeDropdown)),
+          Positioned(
+            width: 280,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              offset: const Offset(0, 45),
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: StatefulBuilder(
+                    builder: (context, setMenuState) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-                          child: Row(children: [
-                            Icon(Icons.view_column, size: 18, color: widget.color),
-                            const SizedBox(width: 8),
-                            const Text("Select Columns", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50)))
-                          ])
-                      ),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 350),
-                        child: ListView(
+                          child: Row(
+                            children: [
+                              Icon(Icons.view_column, size: 18, color: widget.color),
+                              const SizedBox(width: 8),
+                              const Text(
+                                "Select Columns",
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 350),
+                          child: ListView(
                             shrinkWrap: true,
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             children: widget.allColumns.map((col) {
                               final checked = widget.visibleColumns.contains(col);
                               return CheckboxListTile(
-                                  value: checked,
-                                  title: Text(col.title, style: const TextStyle(fontSize: 13, color: Color(0xFF2C3E50))),
-                                  activeColor: widget.color,
-                                  dense: true,
-                                  onChanged: (v) {
-                                    widget.onToggleColumn(col, v!);
-                                    setMenuState(() {});
-                                  }
+                                value: checked,
+                                title: Text(col.title, style: const TextStyle(fontSize: 13, color: Color(0xFF2C3E50))),
+                                activeColor: widget.color,
+                                dense: true,
+                                onChanged: (v) {
+                                  widget.onToggleColumn(col, v!);
+                                  setMenuState(() {});
+                                },
                               );
-                            }).toList()
+                            }).toList(),
+                          ),
                         ),
-                      ),
-                      Padding(
+                        Padding(
                           padding: const EdgeInsets.all(16),
                           child: SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                  onPressed: _removeDropdown,
-                                  style: ElevatedButton.styleFrom(backgroundColor: widget.color),
-                                  child: const Text("Done", style: TextStyle(color: Colors.white))
-                              )
-                          )
-                      ),
-                    ]
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _removeDropdown,
+                              style: ElevatedButton.styleFrom(backgroundColor: widget.color),
+                              child: const Text("Done", style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
-    ]));
+    );
     Overlay.of(context).insert(_dropdownOverlay!);
   }
 
@@ -927,18 +1042,18 @@ class _ColumnsDropdownButtonState extends State<ColumnsDropdownButton> {
   @override
   Widget build(BuildContext context) {
     return CompositedTransformTarget(
-        link: _layerLink,
-        child: OutlinedButton.icon(
-            onPressed: _showDropdown,
-            icon: const Icon(Icons.view_column, size: 16),
-            label: const Text("Columns", style: TextStyle(fontSize: 13)),
-            style: OutlinedButton.styleFrom(
-                foregroundColor: widget.color,
-                side: BorderSide(color: widget.color.withOpacity(0.5)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                minimumSize: const Size(110, 40)
-            )
-        )
+      link: _layerLink,
+      child: OutlinedButton.icon(
+        onPressed: _showDropdown,
+        icon: const Icon(Icons.view_column, size: 16),
+        label: const Text("Columns", style: TextStyle(fontSize: 13)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: widget.color,
+          side: BorderSide(color: widget.color.withOpacity(0.5)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          minimumSize: const Size(110, 40),
+        ),
+      ),
     );
   }
 }

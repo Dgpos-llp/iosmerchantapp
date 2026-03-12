@@ -1,5 +1,36 @@
-iosmerchantapp/build/
-iosmerchantapp/.dart_tool/
-iosmerchantapp/ios/Pods/
-iosmerchantapp/.DS_Store
-iosmerchantapp/ios/.DS_Store
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Logs
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Exports
+*.xlsx
+*.csv
+*.pdf
+
+# Android
+android/.gradle
+android/local.properties
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/.last_build_id
+
+# Coverage
+coverage/
