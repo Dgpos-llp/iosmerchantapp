@@ -938,78 +938,83 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
 
   @override
   @override
+  @override
   Widget build(BuildContext context) {
+    // Check height to dynamically adjust font sizes if the keyboard is active
+    final bool isShortScreen = MediaQuery.of(context).size.height < 650;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FC),
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          padding: const EdgeInsets.all(24),
-          child: Row(
-            // This aligns the center-line of the branding to the center-line of the login box
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Left side - Branding
-              Expanded(
-                flex: 1,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: Column(
-                    // Constrains the column to only take the height its children need
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Image.asset(
-                        'assets/images/dposnewlogopn.png',
-                        width: 250,
-                        height: 120,
-                        fit: BoxFit.contain,
-                        alignment: Alignment.centerLeft,
-                      ),
-                      const SizedBox(height: 30),
-                      Text(
-                        'Welcome Back!!!',
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF2C3E50),
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Manage your restaurants, track sales, and monitor operations all in one place.',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: const Color(0xFF7F8C8D),
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
+      // Ensures the view resizes when the keyboard opens
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Left side - Branding
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildFeatureChip(Icons.restaurant, 'Multi-outlet'),
-                          _buildFeatureChip(Icons.analytics, 'Real-time analytics'),
-                          _buildFeatureChip(Icons.receipt, 'Smart reporting'),
+                          Image.asset(
+                            'assets/images/dposnewlogopn.png',
+                            width: isShortScreen ? 180 : 250,
+                            height: isShortScreen ? 80 : 120,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.centerLeft,
+                          ),
+                          const SizedBox(height: 30),
+                          Text(
+                            'Welcome Back!!!',
+                            style: TextStyle(
+                              fontSize: isShortScreen ? 32 : 48,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF2C3E50),
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Manage your restaurants, track sales, and monitor operations all in one place.',
+                            style: TextStyle(
+                              fontSize: isShortScreen ? 14 : 18,
+                              color: const Color(0xFF7F8C8D),
+                              height: 1.5,
+                            ),
+                          ),
+                          // Only show chips if there is enough vertical space
+                          if (!isShortScreen) ...[
+                            const SizedBox(height: 40),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                _buildFeatureChip(Icons.restaurant, 'Multi-outlet'),
+                                _buildFeatureChip(Icons.analytics, 'Real-time analytics'),
+                                _buildFeatureChip(Icons.receipt, 'Smart reporting'),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 40),
-              // Right side - Login Form
-              Expanded(
-                flex: 1,
-                child: Center(
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 450),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
+                  const SizedBox(width: 40),
+                  // Right side - Login Form
+                  Expanded(
+                    flex: 1,
+                    child: Center(
                       child: Container(
+                        constraints: const BoxConstraints(maxWidth: 450),
                         padding: const EdgeInsets.all(32),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -1061,10 +1066,10 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               controller: usernameController,
                               focusNode: _usernameFocusNode,
                               enabled: !_isLoading,
-                              decoration: InputDecoration(
+                              decoration: const InputDecoration(
                                 hintText: "Enter your username",
                                 prefixIcon: Icon(Icons.person_outline,
-                                    color: const Color(0xFF7F8C8D), size: 20),
+                                    color: Color(0xFF7F8C8D), size: 20),
                               ),
                               onSubmitted: (_) => _fieldFocusChange(context,
                                   _usernameFocusNode, _passwordFocusNode),
@@ -1087,8 +1092,8 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               enabled: !_isLoading,
                               decoration: InputDecoration(
                                 hintText: "Enter your password",
-                                prefixIcon: Icon(Icons.lock_outline,
-                                    color: const Color(0xFF7F8C8D), size: 20),
+                                prefixIcon: const Icon(Icons.lock_outline,
+                                    color: Color(0xFF7F8C8D), size: 20),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _isPasswordVisible
@@ -1103,9 +1108,7 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               ),
                               onSubmitted: (_) {
                                 _passwordFocusNode.unfocus();
-                                if (!_isLoading) {
-                                  login(context, ref);
-                                }
+                                if (!_isLoading) login(context, ref);
                               },
                               textInputAction: TextInputAction.done,
                             ),
@@ -1114,15 +1117,13 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color:
-                                  const Color(0xFFE74C3C).withOpacity(0.1),
+                                  color: const Color(0xFFE74C3C).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.error_outline,
-                                        color: const Color(0xFFE74C3C),
-                                        size: 18),
+                                    const Icon(Icons.error_outline,
+                                        color: Color(0xFFE74C3C), size: 18),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
@@ -1159,14 +1160,12 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                                   width: 24,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor:
-                                    AlwaysStoppedAnimation<Color>(
+                                    valueColor: AlwaysStoppedAnimation<Color>(
                                         Colors.white),
                                   ),
                                 )
                                     : const Row(
-                                  mainAxisAlignment:
-                                  MainAxisAlignment.center,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(Icons.login, size: 20),
                                     SizedBox(width: 10),
@@ -1186,9 +1185,9 @@ class _LoginPageDesktopState extends ConsumerState<LoginPageDesktop> {
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

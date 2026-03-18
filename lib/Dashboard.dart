@@ -585,25 +585,25 @@ class _DashboardState extends ConsumerState<Dashboard> {
     return [
       {
         "title": getSelectedRangeLabel(),
-        "amount": isLoadingSelectedRange ? "..." : formatAmount(selectedRangeSalesAmount),
+        "amount": isLoadingSelectedRange ? "  Loading..." : formatAmount(selectedRangeSalesAmount),
         "icon": Icons.calendar_view_day,
         "gradient": [const Color(0xFF4154F1), const Color(0xFF6B7AF5)],
       },
       {
         "title": "This Month",
-        "amount": isLoadingMonthSales ? "..." : formatAmount(thisMonthSalesAmount),
+        "amount": isLoadingMonthSales ? "  Loading..." : formatAmount(thisMonthSalesAmount),
         "icon": Icons.calendar_month,
         "gradient": [const Color(0xFF2D9CDB), const Color(0xFF5DADE2)],
       },
       {
         "title": "This Year",
-        "amount": isLoadingYearSales ? "..." : formatAmount(thisYearSalesAmount),
+        "amount": isLoadingYearSales ? "  Loading..." : formatAmount(thisYearSalesAmount),
         "icon": Icons.calendar_today,
         "gradient": [const Color(0xFF9B51E0), const Color(0xFFBB6BD9)],
       },
       {
         "title": "Total Pax",
-        "amount": isLoadingPax ? "..." : "  $totalPaxCount",
+        "amount": isLoadingPax ? "  Loading..." : "  $totalPaxCount",
         "icon": Icons.people,
         "gradient": [const Color(0xFFF2994A), const Color(0xFFF7B731)],
       },
@@ -651,24 +651,28 @@ class _DashboardState extends ConsumerState<Dashboard> {
       {
         "title": "Dine In",
         "amount": formatAmount(dineIn),
+        //"orders": "$dineOrders Order${dineOrders == 1 ? "" : "s"}",
         "icon": Icons.restaurant,
         "gradient": [const Color(0xFF2D9CDB), const Color(0xFF5DADE2)],
       },
       {
         "title": "Counter",
         "amount": formatAmount(counter),
+       // "orders": "$counterOrders Order${counterOrders == 1 ? "" : "s"}",
         "icon": Icons.point_of_sale,
         "gradient": [const Color(0xFF9B51E0), const Color(0xFFBB6BD9)],
       },
       {
         "title": "Take Away",
         "amount": formatAmount(takeAway),
+       // "orders": "$takeAwayOrders Order${takeAwayOrders == 1 ? "" : "s"}",
         "icon": Icons.takeout_dining,
         "gradient": [const Color(0xFFF2994A), const Color(0xFFF7B731)],
       },
       {
         "title": "Delivery",
         "amount": formatAmount(delivery),
+        //"orders": "$deliveryOrders Order${deliveryOrders == 1 ? "" : "s"}",
         "icon": Icons.delivery_dining,
         "gradient": [const Color(0xFF27AE60), const Color(0xFF6FCF97)],
       },
@@ -835,7 +839,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
   bool showOutletStatsTable = true;
 
-  @override
   @override
   Widget build(BuildContext context) {
     final onlineTotals = onlineOrderTotals;
@@ -1029,21 +1032,16 @@ class _DashboardState extends ConsumerState<Dashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Mobile layout - stack boxes vertically and move payment below
+                  // Top Section: Stats Grids and Payment Bifurcation
                   if (isMobile) ...[
-                    // Boxes section in 2 columns for mobile
-                    Column(
-                      children: [
-                        _buildCompactStatsGrid(dateWiseBoxes, crossAxisCount: 2, targetHeight: 90),
-                        const SizedBox(height: 16),
-                        _buildCompactStatsGrid(salesTypeBoxes, crossAxisCount: 2, targetHeight: 100),
-                      ],
-                    ),
+                    // On Mobile: Stack everything vertically and use 2 columns for cards
+                    _buildCompactStatsGrid(dateWiseBoxes, crossAxisCount: 2, targetHeight: 90),
+                    const SizedBox(height: 16),
+                    _buildCompactStatsGrid(salesTypeBoxes, crossAxisCount: 2, targetHeight: 100),
                     const SizedBox(height: 24),
-                    // Payment bifurcation below boxes in mobile view
                     _buildPaymentBifurcationSection(true),
                   ] else ...[
-                    // Desktop/Tablet view - keep original layout
+                    // On Desktop: Original Side-by-Side layout
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1068,7 +1066,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
                   const SizedBox(height: 24),
 
-                  // Charts section
+                  // Middle Section: Pie Chart and Sales Overview
                   if (isMobile) ...[
                     _buildPieChartSection(true),
                     const SizedBox(height: 24),
@@ -1086,12 +1084,11 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
                   const SizedBox(height: 24),
 
-                  // Online Orders Section
+                  // Bottom Section: Online Orders and Table
                   _buildOnlineOrdersSection(isMobile, onlineTotals),
 
                   const SizedBox(height: 24),
 
-                  // Outlet Statistics Table
                   _buildOutletwiseStatisticsTable(context, isMobile: size.width < 600),
                 ],
               ),
@@ -1106,20 +1103,20 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final mediaQuery = MediaQuery.of(context);
     final screenWidth = mediaQuery.size.width;
 
-    // For mobile, use full width minus padding
-    double padding = screenWidth < 600 ? 32 : 48;
-    double availableWidth = screenWidth - padding;
+    // Calculate available width based on whether we are in a Row (Desktop) or Column (Mobile)
+    double padding = 48;
+    double availableWidth = screenWidth < 1100 ? (screenWidth - padding) : (screenWidth * 2 / 3) - padding;
 
-    double cardWidth = (availableWidth - ((crossAxisCount - 1) * 12)) / crossAxisCount;
+    double cardWidth = (availableWidth - ((crossAxisCount - 1) * 16)) / crossAxisCount;
     double childAspectRatio = cardWidth / targetHeight;
 
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        crossAxisCount: crossAxisCount, // This now uses the passed parameter
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
         childAspectRatio: childAspectRatio,
       ),
       itemCount: statsData.length,
@@ -1724,36 +1721,16 @@ class _DashboardState extends ConsumerState<Dashboard> {
             else ...[
               _buildPaymentProgressBar(isMobile),
               const SizedBox(height: 12),
-              // For mobile, show in 2 columns grid
-              if (isMobile)
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 3.5,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 4,
-                  ),
-                  itemCount: payments.length,
-                  itemBuilder: (context, index) {
-                    return _buildPaymentItem(payments[index]);
-                  },
-                )
-              else
-                Column(
-                  children: payments.map((p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: _buildPaymentItem(p),
-                  )).toList(),
-                ),
+              ...payments.map((p) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: _buildPaymentItem(p),
+              )),
             ],
           ],
         ),
       ),
     );
   }
-
 
   Widget _buildPaymentProgressBar(bool isMobile) {
     final payments = paymentBifurcation;
@@ -1807,7 +1784,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               payment["label"],
@@ -1819,16 +1796,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Flexible(
-            child: Text(
-              payment["value"].toString().replaceAll("  ", ""),
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-                color: Color(0xFF2C3E50),
-              ),
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
+          Text(
+            payment["value"].toString().replaceAll("  ", ""),
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: Color(0xFF2C3E50),
             ),
           ),
         ],
